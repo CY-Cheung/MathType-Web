@@ -131,7 +131,11 @@ function rowLatex(style: LineStyle | undefined, columns: number): string {
 
 function fenceLatex(fence: MatrixFence, body: string): string {
   const pair = FENCE[fence];
-  return pair ? `${pair[0]}${body}${pair[1]}` : body;
+  if (!pair) return body;
+  // Array keeps the first row on the math axis, so \left/\right mirror the
+  // depth and leave a blank row above the cells. A one-cell matrix centers
+  // that array; the fences then hug the rows. Cell gaps stay on the array.
+  return `${pair[0]}\\begin{matrix}${body}\\end{matrix}${pair[1]}`;
 }
 
 /** Shift the whole matrix. Baseline stays on MathLive's row baseline. */
