@@ -5,6 +5,8 @@ import "./math-markup.css";
 
 /** Button preview only. Inserted templates still keep `#@` and `#?` slots. */
 function iconLatex(latex: string): string {
+  if (!latex.includes("#@") && !latex.includes("#?")) return latex;
+
   const operator = latex.match(
     /^\\(iiiint|iiint|iint|int|sum|prod|coprod|bigcup|bigcap|bigvee|bigwedge|bigoplus|bigotimes)/,
   );
