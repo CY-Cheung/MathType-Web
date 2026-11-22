@@ -128,3 +128,15 @@ export function chordTemplate(chord: ChordName, event: KeyboardEvent): string | 
 export function isModifierOnly(event: KeyboardEvent): boolean {
   return event.key === "Shift" || event.key === "Control" || event.key === "Alt" || event.key === "Meta";
 }
+
+/**
+ * Custom matrix dialog.
+ * Ctrl+M is free: direct shortcuts use F, R, H, L, J, I, 9, and brackets.
+ * Ctrl+D is MathLive's macOS delete-forward binding, so it is not used.
+ */
+export const MATRIX_DIALOG_SHORTCUT = "Ctrl+M";
+
+export function isMatrixDialogShortcut(event: KeyboardEvent): boolean {
+  if (event.repeat || event.altKey || event.metaKey || event.shiftKey || !event.ctrlKey) return false;
+  return event.code === "KeyM";
+}

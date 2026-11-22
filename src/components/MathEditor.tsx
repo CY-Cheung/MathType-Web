@@ -1,5 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import type { MathfieldElement } from "mathlive";
+import { focusAt, readSelection, type EditorSelection } from "../core/editorSelection";
 import { toMathliveTemplate } from "../core/shortcuts";
 import { useMathShortcuts } from "../core/useMathShortcuts";
 import {
@@ -76,17 +77,22 @@ function applyShadowStyle(field: MathfieldElement): void {
 type MathEditorProps = {
   preset?: StylePreset;
   onChordStatus?: (status: string) => void;
+  onMatrixDialog?: () => void;
 };
 
+export type { EditorSelection };
+
 export type MathEditorHandle = {
-  insert: (latex: string) => void;
+  insert: (latex: string, at?: EditorSelection | null) => void;
   capture: () => string;
+  captureSelection: () => EditorSelection;
+  restoreSelection: (selection: EditorSelection | null) => void;
 };
 
 export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
-  function MathEditor({ preset = defaultStylePreset, onChordStatus }, ref) {
+  function MathEditor({ preset = defaultStylePreset, onChordStatus, onMatrixDialog }, ref) {
   const fieldRef = useRef<MathfieldElement>(null);
-  const { chordStatus } = useMathShortcuts(fieldRef);
+  const { chordStatus } = useMathShortcuts(fieldRef, onMatrixDialog);
   const family = fontStack(preset.fontFamily);
   const viewSize = `calc(${preset.fullPt}pt * ${preset.zoomPercent} / 100)`;
 
@@ -128,9 +134,10 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
   }, [chordStatus, onChordStatus]);
 
   useImperativeHandle(ref, () => ({
-    insert(latex: string) {
+    insert(latex: string, at?: EditorSelection | null) {
       const field = fieldRef.current;
       if (!field) return;
+      focusAt(field, at);
       field.executeCommand(["insert", toMathliveTemplate(latex)]);
       field.focus();
     },
@@ -139,6 +146,14 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
       if (!field) return "";
       if (!field.selectionIsCollapsed) return field.getValue(field.selection);
       return field.value;
+    },
+    captureSelection() {
+      const field = fieldRef.current;
+      return field ? readSelection(field) : { ranges: [[0, 0]] };
+    },
+    restoreSelection(selection: EditorSelection | null) {
+      const field = fieldRef.current;
+      if (field) focusAt(field, selection);
     },
   }));
 

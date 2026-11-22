@@ -5,6 +5,7 @@ import {
   chordStart,
   chordTemplate,
   directTemplate,
+  isMatrixDialogShortcut,
   isModifierOnly,
   toMathliveTemplate,
   type ChordName,
@@ -18,7 +19,10 @@ function insertTemplate(field: MathfieldElement, template: string): void {
  * An unmatched second key cancels the chord. If that key would type a
  * character, it is also preventDefault'd so it does not land in the field.
  */
-export function useMathShortcuts(fieldRef: RefObject<MathfieldElement | null>): {
+export function useMathShortcuts(
+  fieldRef: RefObject<MathfieldElement | null>,
+  onMatrixDialog?: () => void,
+): {
   chordStatus: string;
 } {
   const chordRef = useRef<ChordName | null>(null);
@@ -34,6 +38,14 @@ export function useMathShortcuts(fieldRef: RefObject<MathfieldElement | null>): 
     };
 
     const onKeyDown = (event: KeyboardEvent) => {
+      if (isMatrixDialogShortcut(event) && onMatrixDialog) {
+        event.preventDefault();
+        event.stopPropagation();
+        setChord(null);
+        onMatrixDialog();
+        return;
+      }
+
       const chord = chordRef.current;
       if (chord) {
         if (isModifierOnly(event)) return;
@@ -84,7 +96,7 @@ export function useMathShortcuts(fieldRef: RefObject<MathfieldElement | null>): 
 
     field.addEventListener("keydown", onKeyDown, true);
     return () => field.removeEventListener("keydown", onKeyDown, true);
-  }, [fieldRef]);
+  }, [fieldRef, onMatrixDialog]);
 
   return { chordStatus };
 }

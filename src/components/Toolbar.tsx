@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { MathMarkup } from "./MathMarkup";
+import { MATRIX_DIALOG_SHORTCUT } from "../core/shortcuts";
 import {
   symbolPalettes,
   templatePalettes,
@@ -10,6 +11,7 @@ import {
 
 type ToolbarProps = {
   onInsert: (latex: string) => void;
+  onOpenMatrix: () => void;
 };
 
 function keepFocus(event: { preventDefault: () => void }): void {
@@ -48,11 +50,13 @@ function PaletteButton({
   open,
   onToggle,
   onInsert,
+  onOpenMatrix,
 }: {
   palette: ToolbarPalette;
   open: boolean;
   onToggle: () => void;
   onInsert: (latex: string) => void;
+  onOpenMatrix?: () => void;
 }) {
   const icon = palette.icon ?? palette.items[0]?.latex ?? "";
   return (
@@ -76,13 +80,24 @@ function PaletteButton({
           {palette.items.map((entry) => (
             <ItemButton key={entry.id} entry={entry} onInsert={onInsert} />
           ))}
+          {onOpenMatrix ? (
+            <button
+              type="button"
+              title={`Insert Matrix... / 自訂矩陣 (${MATRIX_DIALOG_SHORTCUT})`}
+              className="col-span-4 h-8 bg-white px-2 text-left text-[12px] leading-none hover:bg-[#f4f7fb]"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={onOpenMatrix}
+            >
+              Insert Matrix... / 自訂矩陣
+            </button>
+          ) : null}
         </div>
       ) : null}
     </div>
   );
 }
 
-export function Toolbar({ onInsert }: ToolbarProps) {
+export function Toolbar({ onInsert, onOpenMatrix }: ToolbarProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [openId, setOpenId] = useState<string | null>(null);
 
@@ -119,6 +134,14 @@ export function Toolbar({ onInsert }: ToolbarProps) {
           open={openId === palette.id}
           onToggle={() => setOpenId((current) => (current === palette.id ? null : palette.id))}
           onInsert={insertAndClose}
+          onOpenMatrix={
+            palette.id === "matrices"
+              ? () => {
+                  setOpenId(null);
+                  onOpenMatrix();
+                }
+              : undefined
+          }
         />
       ))}
     </div>
