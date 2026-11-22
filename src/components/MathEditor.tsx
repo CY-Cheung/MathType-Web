@@ -1,0 +1,171 @@
+import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
+import type { MathfieldElement } from "mathlive";
+import { toMathliveTemplate } from "../core/shortcuts";
+import { useMathShortcuts } from "../core/useMathShortcuts";
+import {
+  defaultStylePreset,
+  type StylePreset,
+} from "../types/preset";
+
+const SHADOW_STYLE_ID = "mt-10pt-shadow";
+
+/**
+ * Injected into the math-field shadow root. Variables, numbers, and text use
+ * Times New Roman. Stretchy delimiters and large operators stay on MathLive's
+ * fonts so the layout engine's glyph metrics still match what it positions.
+ */
+export const MATHFIELD_SHADOW_CSS = `
+:host {
+  --_text-font-family: var(--mt-font-family, "Times New Roman", "Liberation Serif", Times, serif);
+  font-family: var(--mt-font-family, "Times New Roman", "Liberation Serif", Times, serif);
+}
+.ML__cmr,
+.ML__mathbf,
+.ML__text,
+.ML__content-placeholder {
+  font-family: var(--mt-font-family, "Times New Roman", "Liberation Serif", Times, serif) !important;
+}
+/* MathLive 0.111 draws \\placeholder{} as U+25A2 on span.ML__cmr. */
+.mt-empty-slot {
+  display: inline-block;
+  box-sizing: border-box;
+  width: 0.48em;
+  height: 0.68em;
+  margin: 0 0.22em;
+  vertical-align: -0.05em;
+  line-height: 1;
+  overflow: hidden;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  border: 1px dashed #008000;
+}
+.ML__mathit,
+.ML__mathbfit,
+.lcGreek.ML__mathbf {
+  font-family: var(--mt-font-family, "Times New Roman", "Liberation Serif", Times, serif) !important;
+  font-style: italic;
+}
+.ML__virtual-keyboard-toggle,
+.ML__menu-toggle {
+  display: none !important;
+}
+`;
+
+function fontStack(fontFamily: string): string {
+  return `"${fontFamily}", "Liberation Serif", Times, serif`;
+}
+
+const EMPTY_SLOT = "\u25A2";
+
+function markEmptySlots(root: ShadowRoot): void {
+  for (const node of root.querySelectorAll("span.ML__cmr")) {
+    if (!(node instanceof HTMLElement)) continue;
+    node.classList.toggle("mt-empty-slot", node.textContent === EMPTY_SLOT);
+  }
+}
+
+function applyShadowStyle(field: MathfieldElement): void {
+  const root = field.shadowRoot;
+  if (!root || root.getElementById(SHADOW_STYLE_ID)) return;
+  const style = document.createElement("style");
+  style.id = SHADOW_STYLE_ID;
+  style.textContent = MATHFIELD_SHADOW_CSS;
+  root.appendChild(style);
+}
+
+type MathEditorProps = {
+  preset?: StylePreset;
+  onChordStatus?: (status: string) => void;
+};
+
+export type MathEditorHandle = {
+  insert: (latex: string) => void;
+  capture: () => string;
+};
+
+export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
+  function MathEditor({ preset = defaultStylePreset, onChordStatus }, ref) {
+  const fieldRef = useRef<MathfieldElement>(null);
+  const { chordStatus } = useMathShortcuts(fieldRef);
+  const family = fontStack(preset.fontFamily);
+  const viewSize = `calc(${preset.fullPt}pt * ${preset.zoomPercent} / 100)`;
+
+  useEffect(() => {
+    const field = fieldRef.current;
+    if (!field) return;
+
+    let cancelled = false;
+    let observer: MutationObserver | null = null;
+
+    const configure = () => {
+      if (cancelled || fieldRef.current !== field) return;
+      field.mathVirtualKeyboardPolicy = "manual";
+      field.menuItems = [];
+      field.letterShapeStyle = "tex";
+      field.defaultMode = "math";
+      field.placeholder = String.raw`\text{Type a formula}`;
+      const root = field.shadowRoot;
+      if (!root) {
+        requestAnimationFrame(configure);
+        return;
+      }
+      applyShadowStyle(field);
+      markEmptySlots(root);
+      observer?.disconnect();
+      observer = new MutationObserver(() => markEmptySlots(root));
+      observer.observe(root, { childList: true, subtree: true, characterData: true });
+    };
+
+    configure();
+    return () => {
+      cancelled = true;
+      observer?.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
+    onChordStatus?.(chordStatus);
+  }, [chordStatus, onChordStatus]);
+
+  useImperativeHandle(ref, () => ({
+    insert(latex: string) {
+      const field = fieldRef.current;
+      if (!field) return;
+      field.executeCommand(["insert", toMathliveTemplate(latex)]);
+      field.focus();
+    },
+    capture() {
+      const field = fieldRef.current;
+      if (!field) return "";
+      if (!field.selectionIsCollapsed) return field.getValue(field.selection);
+      return field.value;
+    },
+  }));
+
+  return (
+    <math-field
+      ref={fieldRef}
+      className="mt-math-field"
+      aria-label="Math editor"
+      math-virtual-keyboard-policy="manual"
+      style={{
+        fontFamily: family,
+        fontSize: viewSize,
+        ["--mt-font-family" as string]: family,
+        ["--mt-full-size" as string]: `${preset.fullPt}pt`,
+        ["--mt-script-size" as string]: `${preset.subSupPt}pt`,
+        ["--mt-scriptscript-size" as string]: `${preset.subSubSupPt}pt`,
+        ["--mt-symbol-size" as string]: `${preset.symbolPt}pt`,
+        ["--mt-subsymbol-size" as string]: `${preset.subSymbolPt}pt`,
+        ["--mt-user1-size" as string]: `${preset.user1Percent}%`,
+        ["--mt-user2-size" as string]: `${preset.user2Percent}%`,
+        ["--mt-selection-bg" as string]: "#80ffff",
+        ["--selection-background-color" as string]: "#80ffff",
+        ["--mt-zoom" as string]: String(preset.zoomPercent / 100),
+        ["--mt-view-size" as string]: viewSize,
+        ["--text-font-family" as string]: family,
+      }}
+    />
+  );
+  },
+);
