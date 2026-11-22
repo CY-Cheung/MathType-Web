@@ -1,8 +1,9 @@
 /**
  * MathType 6.9b custom matrix, compiled to a MathLive array.
  * Vertical rules use the column spec (`|` solid, `:` dashed).
- * Horizontal rules are a full-width `\rule` under the row, with space
- * above and below so the line is not flush against the slots.
+ * A horizontal rule hangs below that row's placeholders, inside the
+ * row gap. It is not an extra array row, so the fences stay the height
+ * of the real rows.
  * `#?` is the same placeholder token the template buttons insert.
  */
 
@@ -85,44 +86,47 @@ function columnSpec(spec: MatrixSpec): string {
   return result;
 }
 
-const RULE_THICKNESS = "0.16em";
-const RULE_SHIFT = "-0.95em";
-const RULE_SEGMENT_EM = 1.9;
-const RULE_PITCH_EM = 2.925;
+/** Thin rule. 0.08em is about 2px at the 200% editor zoom. */
+const RULE_THICKNESS = "0.08em";
+const RULE_RAISE = "-0.68em";
+const RULE_ROW_GAP = "0.65em";
+/** From the right edge of an empty slot back past its left edge. */
+const SLOT_BACK = "-0.72em";
+/** Distance between the left edges of neighboring empty-slot columns. */
+const COLUMN_PITCH_EM = 2.04;
+/** Covers the last slot plus a small pad, and stops inside the fence. */
+const LAST_RULE_EM = 0.7;
 
-function ruleWidthEm(columns: number): number {
-  return (columns - 1) * RULE_PITCH_EM + RULE_SEGMENT_EM;
+function ruleSpanEm(columns: number): number {
+  return (columns - 1) * COLUMN_PITCH_EM + LAST_RULE_EM;
 }
 
 function solidRule(columns: number): string {
-  return `\\hspace{${RULE_SHIFT}}\\mathrlap{\\rule{${ruleWidthEm(columns).toFixed(2)}em}{${RULE_THICKNESS}}}`;
+  const width = ruleSpanEm(columns).toFixed(2);
+  return `\\mathrlap{\\hspace{${SLOT_BACK}}\\rule[${RULE_RAISE}]{${width}em}{${RULE_THICKNESS}}}`;
 }
 
 function dashedRule(columns: number): string {
-  const target = ruleWidthEm(columns);
-  const dash = 0.44;
+  const target = ruleSpanEm(columns);
+  const dash = 0.4;
   const gap = 0.18;
   const parts: string[] = [];
   let used = 0;
-  while (used + dash <= target + 0.05) {
+  while (used + dash <= target + 0.02) {
     if (parts.length > 0) {
       parts.push(`\\hspace{${gap}em}`);
       used += gap;
     }
-    parts.push(`\\rule{${dash}em}{${RULE_THICKNESS}}`);
+    parts.push(`\\rule[${RULE_RAISE}]{${dash}em}{${RULE_THICKNESS}}`);
     used += dash;
   }
-  return `\\hspace{${RULE_SHIFT}}\\mathrlap{${parts.join("")}}`;
+  return `\\mathrlap{\\hspace{${SLOT_BACK}}${parts.join("")}}`;
 }
 
-function ruledCell(mark: string): string {
-  return `\\begin{array}{c}#?\\\\[0.85em]${mark}\\\\[0.8em]\\end{array}`;
-}
-
-function ruledRow(style: LineStyle, columns: number): string {
-  const phantom = `\\vphantom{\\rule{0.2em}{${RULE_THICKNESS}}}`;
-  const rule = style === "dashed" ? dashedRule(columns) : solidRule(columns);
-  return Array.from({ length: columns }, (_, column) => ruledCell(column === 0 ? rule : phantom)).join("&");
+function rowLatex(style: LineStyle | undefined, columns: number): string {
+  const cells = Array.from({ length: columns }, () => "#?");
+  if (style && style !== "none") cells[0] = `#?${style === "dashed" ? dashedRule(columns) : solidRule(columns)}`;
+  return cells.join("&");
 }
 
 function fenceLatex(fence: MatrixFence, body: string): string {
@@ -139,11 +143,12 @@ function raiseLatex(latex: string, align: RowAlign): string {
 
 export function matrixToLatex(spec: MatrixSpec): string {
   const rows: string[] = [];
+  const breaks: string[] = [];
   for (let row = 0; row < spec.rows; row += 1) {
     const below = row < spec.rows - 1 ? spec.horizontalLines[row] : undefined;
-    if (below && below !== "none") rows.push(ruledRow(below, spec.columns));
-    else rows.push(Array.from({ length: spec.columns }, () => "#?").join("&"));
+    rows.push(rowLatex(below, spec.columns));
+    if (row < spec.rows - 1) breaks.push(below && below !== "none" ? `\\\\[${RULE_ROW_GAP}]` : "\\\\");
   }
-  const array = `\\begin{array}{${columnSpec(spec)}}${rows.join("\\\\")}\\end{array}`;
+  const array = `\\begin{array}{${columnSpec(spec)}}${rows.map((row, index) => (index === 0 ? row : `${breaks[index - 1]}${row}`)).join("")}\\end{array}`;
   return raiseLatex(fenceLatex(spec.fence, array), spec.rowAlign);
 }
