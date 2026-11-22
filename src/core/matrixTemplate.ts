@@ -1,7 +1,8 @@
 /**
  * MathType 6.9b custom matrix, compiled to a MathLive array.
  * Vertical rules use the column spec (`|` solid, `:` dashed).
- * Horizontal rules sit under each cell in that row: `\underline` or a short dash.
+ * Horizontal rules are a full-width `\rule` under the row, with space
+ * above and below so the line is not flush against the slots.
  * `#?` is the same placeholder token the template buttons insert.
  */
 
@@ -84,10 +85,44 @@ function columnSpec(spec: MatrixSpec): string {
   return result;
 }
 
-function cellLatex(below: LineStyle | undefined): string {
-  if (!below || below === "none") return "#?";
-  if (below === "dashed") return "\\underset{\\text{-\\,-}}{#?}";
-  return "\\underline{#?}";
+const RULE_THICKNESS = "0.16em";
+const RULE_SHIFT = "-0.95em";
+const RULE_SEGMENT_EM = 1.9;
+const RULE_PITCH_EM = 2.925;
+
+function ruleWidthEm(columns: number): number {
+  return (columns - 1) * RULE_PITCH_EM + RULE_SEGMENT_EM;
+}
+
+function solidRule(columns: number): string {
+  return `\\hspace{${RULE_SHIFT}}\\mathrlap{\\rule{${ruleWidthEm(columns).toFixed(2)}em}{${RULE_THICKNESS}}}`;
+}
+
+function dashedRule(columns: number): string {
+  const target = ruleWidthEm(columns);
+  const dash = 0.44;
+  const gap = 0.18;
+  const parts: string[] = [];
+  let used = 0;
+  while (used + dash <= target + 0.05) {
+    if (parts.length > 0) {
+      parts.push(`\\hspace{${gap}em}`);
+      used += gap;
+    }
+    parts.push(`\\rule{${dash}em}{${RULE_THICKNESS}}`);
+    used += dash;
+  }
+  return `\\hspace{${RULE_SHIFT}}\\mathrlap{${parts.join("")}}`;
+}
+
+function ruledCell(mark: string): string {
+  return `\\begin{array}{c}#?\\\\[0.85em]${mark}\\\\[0.8em]\\end{array}`;
+}
+
+function ruledRow(style: LineStyle, columns: number): string {
+  const phantom = `\\vphantom{\\rule{0.2em}{${RULE_THICKNESS}}}`;
+  const rule = style === "dashed" ? dashedRule(columns) : solidRule(columns);
+  return Array.from({ length: columns }, (_, column) => ruledCell(column === 0 ? rule : phantom)).join("&");
 }
 
 function fenceLatex(fence: MatrixFence, body: string): string {
@@ -106,8 +141,8 @@ export function matrixToLatex(spec: MatrixSpec): string {
   const rows: string[] = [];
   for (let row = 0; row < spec.rows; row += 1) {
     const below = row < spec.rows - 1 ? spec.horizontalLines[row] : undefined;
-    const cells = Array.from({ length: spec.columns }, () => cellLatex(below));
-    rows.push(cells.join("&"));
+    if (below && below !== "none") rows.push(ruledRow(below, spec.columns));
+    else rows.push(Array.from({ length: spec.columns }, () => "#?").join("&"));
   }
   const array = `\\begin{array}{${columnSpec(spec)}}${rows.join("\\\\")}\\end{array}`;
   return raiseLatex(fenceLatex(spec.fence, array), spec.rowAlign);
