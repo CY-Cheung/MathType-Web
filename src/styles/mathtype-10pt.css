@@ -52,6 +52,9 @@ math-field.mt-math-field {
   font-size: var(--mt-view-size);
   --text-font-family: var(--mt-text-font);
   --selection-background-color: var(--mt-selection-bg);
+  /* MathLive paints .ML__text with --highlight-text while focused — clear it. */
+  --highlight-text: transparent;
+  --contains-highlight-background-color: transparent;
   caret-color: #000;
   /* Prefer tap-to-focus over delayed click synthesis on mobile. */
   touch-action: manipulation;

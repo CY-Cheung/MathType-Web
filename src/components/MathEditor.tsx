@@ -39,6 +39,11 @@ export const MATHFIELD_SHADOW_CSS = `
 :host {
   --_text-font-family: var(--mt-ds-text-font, var(--mt-text-font, ${MT_FONT_STACK}));
   font-family: var(--mt-ds-variable-font, var(--mt-math-font, ${MT_FONT_STACK}));
+  /* Kill MathLive focused-text gray wash (Text style letters / scripts). */
+  --highlight-text: transparent;
+  --_text-highlight-background-color: transparent;
+  --contains-highlight-background-color: transparent;
+  --_contains-highlight-background-color: transparent;
 }
 ${buildDefineStylesMappedCss("")}
 /* MathLive 0.111 draws \\placeholder{} as U+25A2 on span.ML__cmr. */
@@ -143,6 +148,8 @@ export type MathEditorHandle = {
   captureSelection: () => EditorSelection;
   restoreSelection: (selection: EditorSelection | null) => void;
   applyActiveStyle: (id: ActiveStyleId) => void;
+  /** MathLive command bridge for Edit menu (undo / cut / clear / …). */
+  executeCommand: (command: string | [string, ...unknown[]]) => boolean;
 };
 
 export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
@@ -412,6 +419,15 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
       if (!field) return;
       applyActiveStyleToField(field, id);
     },
+    executeCommand(command: string | [string, ...unknown[]]) {
+      const field = fieldRef.current;
+      if (!field) return false;
+      try {
+        return Boolean(field.executeCommand(command as never));
+      } catch {
+        return false;
+      }
+    },
   }));
 
   return (
@@ -432,6 +448,9 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
         ["--mt-user2-size" as string]: `${preset.user2Percent}%`,
         ["--mt-selection-bg" as string]: "#80ffff",
         ["--selection-background-color" as string]: "#80ffff",
+        // Transparent text/contains highlights — keep selection cyan only.
+        ["--highlight-text" as string]: "transparent",
+        ["--contains-highlight-background-color" as string]: "transparent",
         ["--mt-zoom" as string]: String(preset.zoomPercent / 100),
         ["--mt-view-size" as string]: viewSize,
         ["--text-font-family" as string]: "var(--mt-ds-text-font, var(--mt-text-font))",

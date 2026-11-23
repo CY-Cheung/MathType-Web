@@ -126,7 +126,7 @@ export function Toolbar({ onInsert, onOpenMatrix }: ToolbarProps) {
   };
 
   const row = (palettes: ToolbarPalette[]) => (
-    <div className="flex flex-nowrap items-center gap-px py-px">
+    <div className="flex w-max min-w-full flex-nowrap items-center gap-px py-px">
       {palettes.map((palette) => (
         <PaletteButton
           key={palette.id}
@@ -150,7 +150,7 @@ export function Toolbar({ onInsert, onOpenMatrix }: ToolbarProps) {
   return (
     <div
       ref={rootRef}
-      className="shrink-0 bg-transparent px-1 py-0.5 text-[#222]"
+      className="min-w-0 shrink-0 bg-transparent px-1 py-0.5 text-[#222]"
     >
       {row(symbolPalettes)}
       {row(templatePalettes)}
