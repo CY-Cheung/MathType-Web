@@ -129,13 +129,27 @@ function rowLatex(style: LineStyle | undefined, columns: number): string {
   return cells.join("&");
 }
 
-function fenceLatex(fence: MatrixFence, body: string): string {
+/**
+ * MathLive switches tall fences to assembled `delim-mult` pieces (about 3+
+ * rows). Those pieces hang farther below the slots than above them. A small
+ * downward nudge recenters the body inside the fence without changing array
+ * row gaps, rule raise, or rule thickness. Short fences stay on glyph steps
+ * (`delim-sizeN`) and are already roughly symmetric, so leave them alone.
+ */
+const TALL_FENCE_AXIS_NUDGE_EM = "-0.10em";
+const TALL_FENCE_MIN_ROWS = 3;
+
+function fenceLatex(fence: MatrixFence, body: string, rows: number): string {
   const pair = FENCE[fence];
   if (!pair) return body;
   // Array keeps the first row on the math axis, so \left/\right mirror the
   // depth and leave a blank row above the cells. A one-cell matrix centers
   // that array; the fences then hug the rows. Cell gaps stay on the array.
-  return `${pair[0]}\\begin{matrix}${body}\\end{matrix}${pair[1]}`;
+  let inner = `\\begin{matrix}${body}\\end{matrix}`;
+  if (rows >= TALL_FENCE_MIN_ROWS) {
+    inner = `\\raise{${TALL_FENCE_AXIS_NUDGE_EM}}{${inner}}`;
+  }
+  return `${pair[0]}${inner}${pair[1]}`;
 }
 
 /** Shift the whole matrix. Baseline stays on MathLive's row baseline. */
@@ -154,5 +168,5 @@ export function matrixToLatex(spec: MatrixSpec): string {
     if (row < spec.rows - 1) breaks.push(below && below !== "none" ? `\\\\[${RULE_ROW_GAP}]` : "\\\\");
   }
   const array = `\\begin{array}{${columnSpec(spec)}}${rows.map((row, index) => (index === 0 ? row : `${breaks[index - 1]}${row}`)).join("")}\\end{array}`;
-  return raiseLatex(fenceLatex(spec.fence, array), spec.rowAlign);
+  return raiseLatex(fenceLatex(spec.fence, array, spec.rows), spec.rowAlign);
 }
