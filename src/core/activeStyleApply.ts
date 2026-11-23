@@ -107,9 +107,32 @@ export function restoreInsertionStyleOnly(
 }
 
 /**
+ * True when the current selection's LaTeX contains math layout (frac, root,
+ * scripts, fences, …). Switching such a range to MathLive `text` mode via
+ * `switchMode` extracts ascii-math and re-inserts TextAtoms — collapsing
+ * `\frac{dy}{dx}` into `()/(dx)` and dropping the numerator.
+ */
+export function selectionHasMathStructure(field: MathfieldElement): boolean {
+  if (field.selectionIsCollapsed) return false;
+  try {
+    const latex = field.getValue(field.selection, "latex") ?? "";
+    if (!latex.trim()) return false;
+    return /\\frac\b|\\dfrac\b|\\tfrac\b|\\sqrt\b|\\root\b|\\over\b|\\choose\b|\\binom\b|\\left\b|\\right\b|\\begin\b|\\sum\b|\\int\b|\\prod\b|\\lim\b|\^|_|\\overset\b|\\underset\b|\\stackrel\b/.test(
+      latex,
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Switch mode + set insertion style; if there is a selection, restyle it too.
  * Function / User styles also wrap the selection in `\\class{mt-ds-*}{...}` so
  * Define Styles CSS vars apply distinctly from Number / Variable.
+ *
+ * Exception: Text / Function (and similar) on a selection that contains math
+ * structures must NOT `switchMode("text")` or wrap with `\mathrm{#@}` — that
+ * flattens fractions into ascii-math TextAtoms. Apply upright style in place.
  */
 export function applyActiveStyleToField(
   field: MathfieldElement,
@@ -117,17 +140,37 @@ export function applyActiveStyleToField(
 ): void {
   const mode = parseModeForActiveStyle(id);
   const style = mathLiveStyleFor(id);
+  const hasSelection = !field.selectionIsCollapsed;
+  const structured = hasSelection && selectionHasMathStructure(field);
 
   clearInsertionStyle(field);
+
+  // Structured selection: never extract via switchMode / \mathrm{#@} wrap.
+  // Stamp upright / face style onto leaf atoms, then set insertion mode safely.
+  if (
+    structured &&
+    (id === "text" || id === "function" || id === "user2" || mode === "text")
+  ) {
+    field.applyStyle(style, { operation: "set" });
+    clearInsertionStyle(field);
+    collapseSelectionToEnd(field);
+    if (field.mode !== mode) {
+      // Caret collapsed — safe to enter text mode for subsequent keystrokes.
+      field.executeCommand(["switchMode", mode]);
+    }
+    if (id !== "math") {
+      field.applyStyle(style, { operation: "set" });
+    }
+    return;
+  }
 
   if (field.mode !== mode) {
     field.executeCommand(["switchMode", mode]);
   }
 
-  const hasSelection = !field.selectionIsCollapsed;
   const className = ACTIVE_STYLE_CLASS[id];
 
-  if (hasSelection && className) {
+  if (hasSelection && className && !structured) {
     // Wrap selection so export / canvas CSS can target the face.
     if (id === "function") {
       field.executeCommand(["insert", `\\class{${className}}{\\mathrm{#@}}`]);
@@ -138,6 +181,9 @@ export function applyActiveStyleToField(
     } else if (id === "user2") {
       field.executeCommand(["insert", `\\class{${className}}{\\mathrm{#@}}`]);
     }
+  } else if (hasSelection && structured) {
+    // Greek / User1 / etc. on structures: style in place (no flattening wrap).
+    field.applyStyle(style, { operation: "set" });
   } else if (hasSelection) {
     field.applyStyle(style, { operation: "set" });
   }

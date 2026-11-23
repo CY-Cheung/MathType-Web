@@ -45,14 +45,22 @@ export const MATHFIELD_SHADOW_CSS = `
   --_text-highlight-background-color: transparent;
   --contains-highlight-background-color: transparent;
   --_contains-highlight-background-color: transparent;
-  /* Neutralize Samsung / MathLive brown IME composition highlight. */
+  /* Clear brown IME wash only — keep composition glyphs fully opaque. */
   --composition-background-color: transparent;
   --_composition-background-color: transparent;
   --composition-underline-color: transparent;
   --_composition-underline-color: transparent;
+  --composition-text-color: #000;
+  --_composition-text-color: #000;
 }
 .ML__composition {
+  /* Background only — never hide the composing letter (e.g. mid-IME d). */
+  background-color: transparent !important;
   background: transparent !important;
+  color: #000 !important;
+  -webkit-text-fill-color: #000 !important;
+  opacity: 1 !important;
+  visibility: visible !important;
   text-decoration: none !important;
 }
 ${buildDefineStylesMappedCss("")}
