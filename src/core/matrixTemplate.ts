@@ -136,7 +136,7 @@ function rowLatex(style: LineStyle | undefined, columns: number): string {
  * row gaps, rule raise, or rule thickness. Short fences stay on glyph steps
  * (`delim-sizeN`) and are already roughly symmetric, so leave them alone.
  */
-const TALL_FENCE_AXIS_NUDGE_EM = "-0.18em";
+const TALL_FENCE_AXIS_NUDGE_EM = "-0.10em";
 const TALL_FENCE_MIN_ROWS = 3;
 
 function fenceLatex(fence: MatrixFence, body: string, rows: number): string {
