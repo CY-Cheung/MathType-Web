@@ -110,22 +110,12 @@ const NO_LINK_DECORATION =
   "text-decoration:none;border:none;border-bottom:none;outline:none;box-shadow:none;text-underline:none;";
 
 /**
- * Word applies `span.MsoHyperlink { text-decoration:underline }` on paste.
- * Keep this compact (no newlines) — lives in `<head>`, outside the fragment.
- */
-const WORD_NO_UNDERLINE_STYLE =
-  "<style><!--" +
-  "a:link,a:visited,span.MsoHyperlink,span.MsoHyperlinkFollowed{" +
-  "color:windowtext;text-decoration:none;text-underline:none;}" +
-  "a img,span.MsoHyperlink img{border:none;text-decoration:none;}" +
-  "--></style>";
-
-/**
  * After the lowered equation run, Word otherwise keeps typing on the same
- * shifted / hyperlink character style. A ZWSP reset run restores 0pt baseline.
+ * shifted / hyperlink character style. A real space (not ZWSP) reset run
+ * restores 0pt baseline — Word swallows `&#8203;` so it never took effect.
  */
 export const WORD_BASELINE_RESET_SPAN =
-  '<span style="vertical-align:0pt;mso-text-raise:0pt;text-decoration:none;color:windowtext;">&#8203;</span>';
+  '<span style="vertical-align:0pt;mso-text-raise:0pt;text-decoration:none;color:windowtext;"> </span>';
 
 /**
  * Word HTML → OOXML baseline shift.
@@ -140,7 +130,7 @@ export function wordBaselineShiftStyle(depthPt: number): string {
 }
 
 /**
- * Pure inline equation markup (no fragment markers) — shifted span+a+img.
+ * Pure inline equation markup — shifted span+a+img only.
  */
 export function buildInlinePngEquationHtml(latex: string, raster: RasterResult): string {
   const href = buildEqHref(latex).replace(/"/g, "&quot;");
@@ -164,23 +154,16 @@ export function buildInlinePngEquationHtml(latex: string, raster: RasterResult):
 }
 
 /**
- * SPEC: 4× PNG as a Word CF_HTML **inline fragment**.
+ * Payload for `ClipboardItem` `text/html`: **inline-only** string.
  *
- * - `<!--StartFragment-->` … `<!--EndFragment-->` with **only** inline nodes
- *   (no `<p>` / `<div>` / `<br>` / newlines inside the fragment) so mid-sentence
- *   paste does not split the paragraph.
- * - Equation span carries measured `vertical-align` / `mso-text-raise`.
- * - Immediately after it, a 0pt reset ZWSP span so continued typing returns to
- *   the normal baseline (and does not inherit hyperlink styling).
+ * Do **not** wrap in `<html>` / `<body>` or hand-write `<!--StartFragment-->` —
+ * on Windows, Chromium already builds CF_HTML around the blob; a second manual
+ * document wrapper makes Word insert a trailing paragraph break.
+ *
+ * Content = equation span (depth shift) + real-space 0pt reset span, no newlines.
  */
 export function wrapPngForWord(latex: string, raster: RasterResult): string {
-  const equation = buildInlinePngEquationHtml(latex, raster);
-  // Single continuous fragment string — no whitespace/newlines between markers.
-  const fragment = `<!--StartFragment-->${equation}${WORD_BASELINE_RESET_SPAN}<!--EndFragment-->`;
-  return (
-    `<!DOCTYPE html><html><head><meta charset="utf-8">${WORD_NO_UNDERLINE_STYLE}</head>` +
-    `<body>${fragment}</body></html>`
-  );
+  return `${buildInlinePngEquationHtml(latex, raster)}${WORD_BASELINE_RESET_SPAN}`;
 }
 
 export async function copyPng(
@@ -196,10 +179,10 @@ export async function copyPng(
     if (raster.width < 2 || raster.height < 2 || raster.blob.size < 32) {
       throw new Error("PNG empty");
     }
+    // Inline-only HTML string — Chromium wraps CF_HTML; no hand-built document.
     const html = wrapPngForWord(latex, raster);
     // HTML-only: a sibling image/png makes Word paste the raw 4× bitmap and
-    // ignore CF_HTML pt sizing + vertical-align / mso-text-raise (early test.html
-    // succeeded with text/html + text/plain only).
+    // ignore CF_HTML pt sizing + vertical-align / mso-text-raise.
     await writeClipboardItems({
       "text/html": new Blob([html], { type: "text/html" }),
       "text/plain": new Blob([latex], { type: "text/plain" }),
