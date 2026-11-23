@@ -32,8 +32,14 @@ const ROWS: { id: RowAlign; label: string }[] = [
 const FENCES: { id: MatrixFence; label: string }[] = [
   { id: "none", label: "None" },
   { id: "paren", label: "( )" },
+  { id: "parenLeft", label: "( ." },
+  { id: "parenRight", label: ". )" },
   { id: "bracket", label: "[ ]" },
+  { id: "bracketLeft", label: "[ ." },
+  { id: "bracketRight", label: ". ]" },
   { id: "brace", label: "{ }" },
+  { id: "braceLeft", label: "{ ." },
+  { id: "braceRight", label: ". }" },
   { id: "bar", label: "| |" },
 ];
 
@@ -128,6 +134,10 @@ export function MatrixDialog({ onCancel, onConfirm }: MatrixDialogProps) {
             options={FENCES}
             onChange={(fence) => setSpec((current) => ({ ...current, fence }))}
           />
+          <p className="-mt-2 text-[11px] text-[#555]">
+            Options ending in <code className="rounded-sm bg-[#ececec] px-0.5">.</code> are
+            single-sided (left-only / right-only) — useful for piecewise / systems.
+          </p>
           <div className="flex items-center justify-between gap-3">
             <p className="text-[12px] text-[#333]">Shortcut: {MATRIX_DIALOG_SHORTCUT}</p>
             <div className="flex gap-2">
