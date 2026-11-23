@@ -1,5 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import type { MathfieldElement } from "mathlive";
+import { attachAndroidBackspaceBridge } from "../adapters/androidBackspaceBridge";
 import { focusAt, readSelection, type EditorSelection } from "../core/editorSelection";
 import { toMathliveTemplate } from "../core/shortcuts";
 import { useMathShortcuts } from "../core/useMathShortcuts";
@@ -138,6 +139,7 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
     let cancelled = false;
     let slotObserver: MutationObserver | null = null;
     let inputModeObserver: MutationObserver | null = null;
+    let detachBackspaceBridge: (() => void) | null = null;
 
     const configure = () => {
       if (cancelled || fieldRef.current !== field) return;
@@ -177,6 +179,10 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
         attributes: true,
         attributeFilter: ["inputmode", "autocorrect", "autocapitalize", "spellcheck"],
       });
+
+      // Touch / Android: ZWSP sentinel so OS Backspace still reaches MathLive.
+      detachBackspaceBridge?.();
+      detachBackspaceBridge = attachAndroidBackspaceBridge(field);
     };
 
     /** Re-assert inputmode + focus the sink inside the user gesture (Android). */
@@ -204,6 +210,7 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
       cancelled = true;
       slotObserver?.disconnect();
       inputModeObserver?.disconnect();
+      detachBackspaceBridge?.();
       field.removeEventListener("focusin", onFocusIn);
       field.removeEventListener("pointerup", onPointerUp);
     };
