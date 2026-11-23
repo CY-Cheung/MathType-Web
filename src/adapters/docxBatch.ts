@@ -1,12 +1,23 @@
 import JSZip from "jszip";
-import { decompressFromEncodedURIComponent } from "lz-string";
+import {
+  compressToEncodedURIComponent,
+  decompressFromEncodedURIComponent,
+} from "lz-string";
+import {
+  collectTextSpans,
+  extractEqTargets,
+  replaceMergedRange,
+  serializeXml,
+  updateRelsEqTarget,
+  R_NS,
+  uniqueElements,
+} from "./docxXml";
+import { renderFormulaPng } from "./renderFormula";
 
 /**
- * Phase 3 Step 1 — read / scan only (SPEC.md §4).
- * Detects:
- *   1. `#eq=` hyperlink targets in `word/_rels/document.xml.rels`
- *   2. TeX delimiters `$...$` and `\[...\]` in merged `w:t` text
- * Write-back / re-pack is deferred to later steps.
+ * Phase 3 Step 2 — scan + edit write-back + re-pack (SPEC.md §4).
+ * `#eq=` → re-encode lz-string in rels (+ best-effort media PNG refresh).
+ * `$...$` / `\[...\]` → rewrite delimiter text across fragmented `w:t` runs.
  */
 
 export type FormulaKind = "eq-link" | "tex-inline" | "tex-display";
@@ -15,22 +26,24 @@ export type ScannedFormula = {
   id: string;
   index: number;
   kind: FormulaKind;
-  /** Best-effort LaTeX for MathEditor preview. */
   latex: string;
-  /** Short label for the list row. */
   summary: string;
-  /** Raw XML / text snippet for inspection. */
   raw: string;
+  modified: boolean;
+  originalLatex: string;
+  textStart?: number;
+  textEnd?: number;
+  relId?: string;
 };
 
-export type DocxScanResult = {
+export type DocxSession = {
   fileName: string;
+  zip: JSZip;
+  documentXml: string;
+  relsXml: string;
   formulas: ScannedFormula[];
   warnings: string[];
 };
-
-const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
-const R_NS = "http://schemas.openxmlformats.org/package/2006/relationships";
 
 function truncate(text: string, max = 96): string {
   const one = text.replace(/\s+/g, " ").trim();
@@ -55,50 +68,13 @@ function decodeEqPayload(payload: string): { latex: string; warning?: string } {
   return { latex: raw, warning: "Could not lz-decode #eq=; showing raw payload" };
 }
 
-function uniqueElements(lists: Iterable<Element>[]): Element[] {
-  const seen = new Set<Element>();
-  const out: Element[] = [];
-  for (const list of lists) {
-    for (const node of list) {
-      if (seen.has(node)) continue;
-      seen.add(node);
-      out.push(node);
-    }
-  }
-  return out;
-}
-
-function extractEqTargets(relsXml: string): { id: string; target: string; payload: string }[] {
-  const doc = new DOMParser().parseFromString(relsXml, "application/xml");
-  const nodes = uniqueElements([
-    doc.getElementsByTagNameNS(R_NS, "Relationship"),
-    doc.getElementsByTagName("Relationship"),
-  ]);
-  const found: { id: string; target: string; payload: string }[] = [];
-  for (const node of nodes) {
-    const target = node.getAttribute("Target") ?? "";
-    const hash = target.indexOf("#eq=");
-    if (hash < 0) continue;
-    found.push({
-      id: node.getAttribute("Id") ?? `rId${found.length + 1}`,
-      target,
-      payload: target.slice(hash + 4),
-    });
-  }
-  return found;
-}
-
-/** Concatenate every `w:t` in document order (SPEC: merge fragmented runs first). */
-function mergedDocumentText(documentXml: string): string {
-  const doc = new DOMParser().parseFromString(documentXml, "application/xml");
-  const texts = uniqueElements([
-    doc.getElementsByTagNameNS(W_NS, "t"),
-    doc.getElementsByTagName("w:t"),
-  ]);
-  return texts.map((n) => n.textContent ?? "").join("");
-}
-
-type TexHit = { kind: "tex-inline" | "tex-display"; latex: string; raw: string; index: number };
+type TexHit = {
+  kind: "tex-inline" | "tex-display";
+  latex: string;
+  raw: string;
+  index: number;
+  end: number;
+};
 
 function scanTexDelimiters(text: string): TexHit[] {
   const hits: TexHit[] = [];
@@ -110,25 +86,25 @@ function scanTexDelimiters(text: string): TexHit[] {
       latex: match[1].trim(),
       raw: match[0],
       index: match.index,
+      end: match.index + match[0].length,
     });
   }
-  // Inline $...$ — skip $$ display pairs and escaped \$.
   const inline = /(^|[^\\$])\$([^\$\n]+?)\$/g;
   while ((match = inline.exec(text))) {
     const latex = match[2].trim();
     if (!latex) continue;
-    hits.push({
-      kind: "tex-inline",
-      latex,
-      raw: `$${match[2]}$`,
-      index: match.index + match[1].length,
-    });
+    const raw = `$${match[2]}$`;
+    const index = match.index + match[1].length;
+    hits.push({ kind: "tex-inline", latex, raw, index, end: index + raw.length });
   }
-  hits.sort((a, b) => a.index - b.index);
-  return hits;
+  return hits.sort((a, b) => a.index - b.index);
 }
 
-export async function scanDocxFile(file: File): Promise<DocxScanResult> {
+function wrapTex(kind: "tex-inline" | "tex-display", latex: string): string {
+  return kind === "tex-inline" ? `$${latex}$` : `\\[${latex}\\]`;
+}
+
+export async function openDocxSession(file: File): Promise<DocxSession> {
   const warnings: string[] = [];
   const zip = await JSZip.loadAsync(await file.arrayBuffer());
   const documentFile = zip.file("word/document.xml");
@@ -150,14 +126,17 @@ export async function scanDocxFile(file: File): Promise<DocxScanResult> {
       kind: "eq-link",
       latex: decoded.latex,
       summary: truncate(decoded.latex || rel.payload),
-      raw: truncate(rel.target, 160),
+      raw: truncate(rel.target, 120),
+      modified: false,
+      originalLatex: decoded.latex,
+      relId: rel.id,
     });
   }
 
-  const text = mergedDocumentText(documentXml);
-  if (!text.trim()) warnings.push("document.xml has no readable w:t text");
+  const { merged } = collectTextSpans(documentXml);
+  if (!merged.trim()) warnings.push("document.xml has no readable w:t text");
 
-  for (const hit of scanTexDelimiters(text)) {
+  for (const hit of scanTexDelimiters(merged)) {
     index += 1;
     formulas.push({
       id: `${hit.kind}-${hit.index}`,
@@ -165,11 +144,110 @@ export async function scanDocxFile(file: File): Promise<DocxScanResult> {
       kind: hit.kind,
       latex: hit.latex,
       summary: truncate(hit.latex),
-      raw: truncate(hit.raw, 160),
+      raw: truncate(hit.raw, 120),
+      modified: false,
+      originalLatex: hit.latex,
+      textStart: hit.index,
+      textEnd: hit.end,
     });
   }
 
-  return { fileName: file.name, formulas, warnings };
+  return { fileName: file.name, zip, documentXml, relsXml, formulas, warnings };
+}
+
+export async function scanDocxFile(file: File) {
+  const session = await openDocxSession(file);
+  return { fileName: session.fileName, formulas: session.formulas, warnings: session.warnings };
+}
+
+export function applyFormulaEdit(
+  session: DocxSession,
+  formulaId: string,
+  nextLatex: string,
+): DocxSession {
+  const latex = nextLatex.trim();
+  if (!latex) throw new Error("Nothing to apply");
+  const formulas = session.formulas.map((f) => {
+    if (f.id !== formulaId) return f;
+    return {
+      ...f,
+      latex,
+      summary: truncate(latex),
+      modified: latex !== f.originalLatex,
+      raw:
+        f.kind === "eq-link"
+          ? truncate(`#eq=${compressToEncodedURIComponent(latex)}`, 120)
+          : truncate(wrapTex(f.kind, latex), 120),
+    };
+  });
+  return { ...session, formulas };
+}
+
+function updateDocumentTex(
+  documentXml: string,
+  mods: { start: number; end: number; kind: "tex-inline" | "tex-display"; latex: string }[],
+): string {
+  const { spans, doc } = collectTextSpans(documentXml);
+  for (const mod of [...mods].sort((a, b) => b.start - a.start)) {
+    replaceMergedRange(spans, mod.start, mod.end, wrapTex(mod.kind, mod.latex));
+  }
+  return serializeXml(doc);
+}
+
+async function refreshEqMedia(zip: JSZip, relsXml: string, latex: string): Promise<void> {
+  const relsDoc = new DOMParser().parseFromString(relsXml, "application/xml");
+  const imageRels = uniqueElements([
+    relsDoc.getElementsByTagNameNS(R_NS, "Relationship"),
+    relsDoc.getElementsByTagName("Relationship"),
+  ]).filter((n) => (n.getAttribute("Type") ?? "").includes("/image"));
+  if (imageRels.length === 0) return;
+  const png = await renderFormulaPng(latex, 4);
+  const target = imageRels[0]?.getAttribute("Target");
+  if (!target) return;
+  const path = target.startsWith("/") ? target.slice(1) : `word/${target.replace(/^\.\.\//, "")}`;
+  zip.file(path.includes("word/") ? path : `word/${path}`, png.blob);
+}
+
+export async function exportDocxSession(session: DocxSession): Promise<Blob> {
+  const modified = session.formulas.filter((f) => f.modified);
+  if (modified.length === 0) throw new Error("No modifications to export");
+
+  let relsXml = session.relsXml;
+  let documentXml = session.documentXml;
+
+  for (const f of modified) {
+    if (f.kind === "eq-link" && f.relId) {
+      relsXml = updateRelsEqTarget(relsXml, f.relId, compressToEncodedURIComponent(f.latex));
+    }
+  }
+
+  const texMods = modified
+    .filter(
+      (f): f is ScannedFormula & { textStart: number; textEnd: number; kind: "tex-inline" | "tex-display" } =>
+        (f.kind === "tex-inline" || f.kind === "tex-display") &&
+        typeof f.textStart === "number" &&
+        typeof f.textEnd === "number",
+    )
+    .map((f) => ({ start: f.textStart, end: f.textEnd, kind: f.kind, latex: f.latex }));
+  if (texMods.length) documentXml = updateDocumentTex(documentXml, texMods);
+
+  session.zip.file("word/document.xml", documentXml);
+  if (relsXml) session.zip.file("word/_rels/document.xml.rels", relsXml);
+
+  for (const f of modified) {
+    if (f.kind !== "eq-link") continue;
+    try {
+      await refreshEqMedia(session.zip, relsXml, f.latex);
+    } catch {
+      /* best-effort Format Equations media refresh */
+    }
+  }
+
+  return session.zip.generateAsync({
+    type: "blob",
+    mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    compression: "DEFLATE",
+  });
 }
 
 export function kindLabel(kind: FormulaKind): string {
@@ -181,4 +259,13 @@ export function kindLabel(kind: FormulaKind): string {
     case "tex-display":
       return "TeX \\[…\\]";
   }
+}
+
+export function downloadBlob(blob: Blob, fileName: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${fileName.replace(/\.docx$/i, "")}-updated.docx`;
+  a.click();
+  URL.revokeObjectURL(url);
 }

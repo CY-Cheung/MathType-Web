@@ -136,6 +136,7 @@ export default function App() {
             <DocxBatchPanel
               onClose={() => setBatchOpen(false)}
               onLoadFormula={(latex) => editorRef.current?.load(latex)}
+              onCaptureLatex={() => editorRef.current?.captureLatex() ?? ""}
               onStatus={showToast}
             />
           ) : null}
