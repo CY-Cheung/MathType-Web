@@ -34,8 +34,6 @@
   --mt-empty-slot-color: #008000;
   --mt-view-size: calc(var(--mt-full-size) * var(--mt-zoom));
   --text-font-family: var(--mt-text-font);
-  /* MathLive virtual keyboard — above batch panel (z-40) / dialogs (z-50). */
-  --keyboard-zindex: 200;
   color-scheme: light;
 }
 
@@ -71,15 +69,12 @@ math-field.mt-math-field:focus {
   outline: none;
 }
 
-/* Hide the empty MathLive chrome menu only. Virtual-keyboard toggle + panel
-   must stay visible so mobile taps can open / dismiss the math keyboard.
-   MathLive mounts `.ML__keyboard` on document.body (position:fixed) — do not
-   force display:none or overflow clipping here. */
+/* MathLive VK is unused — mobile uses the OS native keyboard via inputmode=text
+   on `.ML__keyboard-sink`. Hide the panel + field-side toggle (toolbar covers insert). */
 math-field::part(menu-toggle),
+math-field::part(virtual-keyboard-toggle),
+.ML__keyboard,
+.ML__virtual-keyboard-toggle,
 .ML__menu-toggle {
   display: none !important;
-}
-
-body > .ML__keyboard {
-  z-index: var(--keyboard-zindex, 200);
 }

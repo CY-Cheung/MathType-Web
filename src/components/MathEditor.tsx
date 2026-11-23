@@ -37,8 +37,8 @@ ${buildDefineStylesMappedCss("")}
   -webkit-text-fill-color: transparent;
   border: 1px dashed #008000;
 }
-/* Keep the MathLive chrome menu off (menuItems = []); leave the
-   virtual-keyboard toggle visible so mobile users can dismiss / reopen. */
+/* Toolbar already covers insertion; hide MathLive chrome toggles. */
+.ML__virtual-keyboard-toggle,
 .ML__menu-toggle {
   display: none !important;
 }
@@ -63,6 +63,38 @@ function applyShadowStyle(field: MathfieldElement): void {
     root.appendChild(style);
   }
   style.textContent = MATHFIELD_SHADOW_CSS;
+}
+
+/** MathLive's contenteditable sink that owns keyboard focus (Shadow DOM). */
+function findKeyboardSink(field: MathfieldElement): HTMLElement | null {
+  const root = field.shadowRoot;
+  if (!root) return null;
+  const sink = root.querySelector(".ML__keyboard-sink");
+  return sink instanceof HTMLElement ? sink : null;
+}
+
+/**
+ * Unlock the OS / Android native keyboard.
+ * MathLive ships the sink as `inputmode=none` so only its virtual keyboard
+ * appears — override to `text` and keep autocorrect off for formula entry.
+ */
+function setAttrIfNeeded(el: HTMLElement, name: string, value: string): void {
+  if (el.getAttribute(name) !== value) el.setAttribute(name, value);
+}
+
+export function unlockNativeKeyboardSink(sink: HTMLElement): void {
+  // Only write when values differ — avoids MutationObserver feedback loops.
+  setAttrIfNeeded(sink, "inputmode", "text");
+  setAttrIfNeeded(sink, "autocorrect", "off");
+  setAttrIfNeeded(sink, "autocapitalize", "off");
+  setAttrIfNeeded(sink, "autocomplete", "off");
+  setAttrIfNeeded(sink, "spellcheck", "false");
+}
+
+function unlockFieldNativeKeyboard(field: MathfieldElement): HTMLElement | null {
+  const sink = findKeyboardSink(field);
+  if (sink) unlockNativeKeyboardSink(sink);
+  return sink;
 }
 
 type MathEditorProps = {
@@ -104,13 +136,18 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
     if (!field) return;
 
     let cancelled = false;
-    let observer: MutationObserver | null = null;
+    let slotObserver: MutationObserver | null = null;
+    let inputModeObserver: MutationObserver | null = null;
 
     const configure = () => {
       if (cancelled || fieldRef.current !== field) return;
-      // "auto": MathLive shows its virtual keyboard on touch focusin.
-      // "manual" + CSS display:none was blocking mobile keyboards entirely.
-      field.mathVirtualKeyboardPolicy = "auto";
+      // Keep MathLive VK off — mobile uses the OS native keyboard instead.
+      field.mathVirtualKeyboardPolicy = "manual";
+      try {
+        window.mathVirtualKeyboard?.hide();
+      } catch {
+        /* optional */
+      }
       field.menuItems = [];
       field.letterShapeStyle = "tex";
       field.defaultMode = "math";
@@ -121,30 +158,53 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
         return;
       }
       applyShadowStyle(field);
+      unlockFieldNativeKeyboard(field);
       markEmptySlots(root);
-      observer?.disconnect();
-      observer = new MutationObserver(() => markEmptySlots(root));
-      observer.observe(root, { childList: true, subtree: true, characterData: true });
+
+      slotObserver?.disconnect();
+      slotObserver = new MutationObserver(() => markEmptySlots(root));
+      slotObserver.observe(root, { childList: true, subtree: true, characterData: true });
+
+      // MathLive may recreate the sink or rewrite inputmode=none — force text back.
+      inputModeObserver?.disconnect();
+      inputModeObserver = new MutationObserver(() => {
+        if (cancelled) return;
+        unlockFieldNativeKeyboard(field);
+      });
+      inputModeObserver.observe(root, {
+        subtree: true,
+        childList: true,
+        attributes: true,
+        attributeFilter: ["inputmode", "autocorrect", "autocapitalize", "spellcheck"],
+      });
     };
 
-    /** Ensure focus + VK show stay inside the user gesture (some WebViews). */
+    /** Re-assert inputmode + focus the sink inside the user gesture (Android). */
+    const promoteNativeKeyboard = () => {
+      if (cancelled || fieldRef.current !== field || !field.isConnected) return;
+      const sink = unlockFieldNativeKeyboard(field);
+      field.focus();
+      // Focusing the contenteditable sink is what Android Chrome keys off.
+      sink?.focus({ preventScroll: true });
+    };
+
+    const onFocusIn = () => {
+      unlockFieldNativeKeyboard(field);
+    };
+
     const onPointerUp = (event: PointerEvent) => {
       if (event.pointerType !== "touch" && event.pointerType !== "pen") return;
-      if (cancelled || fieldRef.current !== field) return;
-      if (!field.isConnected) return;
-      field.focus();
-      try {
-        window.mathVirtualKeyboard?.show({ animate: true });
-      } catch {
-        /* MathLive may not have attached yet; policy=auto still covers focusin. */
-      }
+      promoteNativeKeyboard();
     };
 
     configure();
+    field.addEventListener("focusin", onFocusIn);
     field.addEventListener("pointerup", onPointerUp);
     return () => {
       cancelled = true;
-      observer?.disconnect();
+      slotObserver?.disconnect();
+      inputModeObserver?.disconnect();
+      field.removeEventListener("focusin", onFocusIn);
       field.removeEventListener("pointerup", onPointerUp);
     };
   }, [stylesEpoch]);
@@ -194,7 +254,7 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
       ref={fieldRef}
       className="mt-math-field"
       aria-label="Math editor"
-      math-virtual-keyboard-policy="auto"
+      math-virtual-keyboard-policy="manual"
       style={{
         fontFamily: `var(--mt-ds-variable-font, ${MT_FONT_STACK})`,
         fontSize: viewSize,
