@@ -1,8 +1,5 @@
 import JSZip from "jszip";
-import {
-  compressToEncodedURIComponent,
-  decompressFromEncodedURIComponent,
-} from "lz-string";
+import { decodeEqPayload, encodeEqPayload } from "./eqHash";
 import {
   collectTextSpans,
   extractEqTargets,
@@ -50,22 +47,17 @@ function truncate(text: string, max = 96): string {
   return one.length <= max ? one : `${one.slice(0, max - 1)}…`;
 }
 
-function decodeEqPayload(payload: string): { latex: string; warning?: string } {
-  const raw = payload.trim();
-  if (!raw) return { latex: "", warning: "Empty #eq= payload" };
+function decodeEqForScan(payload: string): { latex: string; warning?: string } {
+  const latex = decodeEqPayload(payload);
+  if (latex) return { latex };
+  if (!payload.trim()) return { latex: "", warning: "Empty #eq= payload" };
   try {
-    const decoded = decompressFromEncodedURIComponent(raw);
-    if (decoded) return { latex: decoded };
-  } catch {
-    /* fall through */
-  }
-  try {
-    const uri = decodeURIComponent(raw);
-    if (uri && uri !== raw) return { latex: uri, warning: "Uncompressed #eq= payload" };
+    const uri = decodeURIComponent(payload.trim());
+    if (uri) return { latex: uri, warning: "Uncompressed #eq= payload" };
   } catch {
     /* ignore */
   }
-  return { latex: raw, warning: "Could not lz-decode #eq=; showing raw payload" };
+  return { latex: payload.trim(), warning: "Could not lz-decode #eq=; showing raw payload" };
 }
 
 type TexHit = {
@@ -117,7 +109,7 @@ export async function openDocxSession(file: File): Promise<DocxSession> {
   let index = 0;
 
   for (const rel of extractEqTargets(relsXml)) {
-    const decoded = decodeEqPayload(rel.payload);
+    const decoded = decodeEqForScan(rel.payload);
     if (decoded.warning) warnings.push(`${rel.id}: ${decoded.warning}`);
     index += 1;
     formulas.push({
@@ -176,7 +168,7 @@ export function applyFormulaEdit(
       modified: latex !== f.originalLatex,
       raw:
         f.kind === "eq-link"
-          ? truncate(`#eq=${compressToEncodedURIComponent(latex)}`, 120)
+          ? truncate(`#eq=${encodeEqPayload(latex)}`, 120)
           : truncate(wrapTex(f.kind, latex), 120),
     };
   });
@@ -217,7 +209,7 @@ export async function exportDocxSession(session: DocxSession): Promise<Blob> {
 
   for (const f of modified) {
     if (f.kind === "eq-link" && f.relId) {
-      relsXml = updateRelsEqTarget(relsXml, f.relId, compressToEncodedURIComponent(f.latex));
+      relsXml = updateRelsEqTarget(relsXml, f.relId, encodeEqPayload(f.latex));
     }
   }
 

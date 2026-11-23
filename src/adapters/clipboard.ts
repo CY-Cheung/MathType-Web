@@ -1,8 +1,10 @@
 import { convertLatexToMathMl } from "mathlive";
+import { buildEqHref } from "./eqHash";
 import {
   DEFAULT_EXPORT_SCALE,
   renderFormulaPng,
   renderFormulaSvg,
+  type RasterResult,
 } from "./renderFormula";
 
 export type ExportFormat = "mathml" | "png" | "svg" | "latex";
@@ -106,6 +108,19 @@ export async function copyMathMl(latex: string): Promise<ClipboardExportResult> 
   return writeLatexFallback(latex, "MathML write failed");
 }
 
+/** SPEC: 4× PNG inside `<a href="…#eq=…">` with dynamic baseline offset. */
+export function wrapPngForWord(latex: string, raster: RasterResult): string {
+  const href = buildEqHref(latex).replace(/"/g, "&quot;");
+  const align =
+    raster.baselinePt > 0
+      ? `vertical-align:-${raster.baselinePt}pt;`
+      : "vertical-align:baseline;";
+  const img =
+    `<img src="${raster.dataUrl}" width="${raster.cssWidth}" height="${raster.cssHeight}" ` +
+    `style="${align}" alt="equation" />`;
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body><a href="${href}">${img}</a></body></html>`;
+}
+
 export async function copyPng(
   latex: string,
   scale: number = DEFAULT_EXPORT_SCALE,
@@ -115,17 +130,27 @@ export async function copyPng(
     return writeLatexFallback(latex, "no ClipboardItem");
   }
   try {
-    const { blob, width, height } = await renderFormulaPng(latex, scale);
-    if (width < 2 || height < 2 || blob.size < 32) {
+    const raster = await renderFormulaPng(latex, scale);
+    if (raster.width < 2 || raster.height < 2 || raster.blob.size < 32) {
       throw new Error("PNG empty");
     }
-    await writeClipboardItems({
-      "image/png": blob,
-      "text/plain": new Blob([latex], { type: "text/plain" }),
-    });
+    const html = wrapPngForWord(latex, raster);
+    try {
+      await writeClipboardItems({
+        "image/png": raster.blob,
+        "text/html": new Blob([html], { type: "text/html" }),
+        "text/plain": new Blob([latex], { type: "text/plain" }),
+      });
+    } catch {
+      // Some hosts reject mixed image+html — still ship the Word HTML payload.
+      await writeClipboardItems({
+        "text/html": new Blob([html], { type: "text/html" }),
+        "text/plain": new Blob([latex], { type: "text/plain" }),
+      });
+    }
     return {
       format: "png",
-      message: `Copied: PNG (${scale}x, ${width}×${height})`,
+      message: `Copied: PNG (${scale}x, ${raster.width}×${raster.height}) + #eq=`,
       fallback: false,
     };
   } catch {

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { copyExport, type ExportFormat } from "./adapters/clipboard";
+import { parseEqHash } from "./adapters/eqHash";
 import { DocxBatchPanel } from "./components/DocxBatchPanel";
 import { MathEditor, type EditorSelection, type MathEditorHandle } from "./components/MathEditor";
 import { ExportMenu } from "./components/ExportMenu";
@@ -100,6 +101,28 @@ export default function App() {
     },
     [],
   );
+
+  // SPEC Phase 2: load `#eq=<lz-string>` on boot and hashchange.
+  useEffect(() => {
+    const applyHash = () => {
+      const hash = window.location.hash;
+      if (!hash || !hash.includes("eq=")) return;
+      const latex = parseEqHash(hash);
+      if (!latex) {
+        showToast("Invalid #eq= link");
+        return;
+      }
+      editorRef.current?.load(latex);
+      showToast("Loaded formula from #eq=");
+    };
+    // Wait one frame so <math-field> is mounted.
+    const id = window.requestAnimationFrame(applyHash);
+    window.addEventListener("hashchange", applyHash);
+    return () => {
+      window.cancelAnimationFrame(id);
+      window.removeEventListener("hashchange", applyHash);
+    };
+  }, [showToast]);
 
   const status = toast || chordStatus || STATUS_BAR_LABEL;
 
