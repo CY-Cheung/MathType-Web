@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import type { MathfieldElement } from "mathlive";
-import { commitPendingComposition } from "../adapters/commitComposition";
-import { adaptInsertTemplate } from "./insertTemplate";
+import type { ActiveStyleId } from "../types/activeStyle";
+import { insertAdaptedLatex } from "./insertAdapted";
 import {
   CHORD_STATUS,
   chordStart,
@@ -9,18 +9,13 @@ import {
   directTemplate,
   isMatrixDialogShortcut,
   isModifierOnly,
-  toMathliveTemplate,
   type ChordName,
 } from "./shortcuts";
 
-function insertTemplate(field: MathfieldElement, template: string): void {
-  commitPendingComposition(field);
-  const adapted = adaptInsertTemplate(
-    toMathliveTemplate(template),
-    !field.selectionIsCollapsed,
-  );
-  field.executeCommand(["insert", adapted]);
-}
+export type MathShortcutsOptions = {
+  getActiveStyle?: () => ActiveStyleId;
+  suppressModeLock?: { current: boolean };
+};
 
 /**
  * An unmatched second key cancels the chord. If that key would type a
@@ -29,15 +24,26 @@ function insertTemplate(field: MathfieldElement, template: string): void {
 export function useMathShortcuts(
   fieldRef: RefObject<MathfieldElement | null>,
   onMatrixDialog?: () => void,
+  options: MathShortcutsOptions = {},
 ): {
   chordStatus: string;
 } {
   const chordRef = useRef<ChordName | null>(null);
   const [chordStatus, setChordStatus] = useState("");
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
 
   useEffect(() => {
     const field = fieldRef.current;
     if (!field) return;
+
+    const insertTemplate = (template: string) => {
+      const { getActiveStyle, suppressModeLock } = optionsRef.current;
+      insertAdaptedLatex(field, template, {
+        activeStyle: getActiveStyle?.() ?? "math",
+        suppressModeLock,
+      });
+    };
 
     const setChord = (next: ChordName | null) => {
       chordRef.current = next;
@@ -74,7 +80,7 @@ export function useMathShortcuts(
           event.preventDefault();
           event.stopPropagation();
           setChord(null);
-          insertTemplate(field, direct);
+          insertTemplate(direct);
           return;
         }
         const template = chordTemplate(chord, event);
@@ -83,7 +89,7 @@ export function useMathShortcuts(
           event.stopPropagation();
         }
         setChord(null);
-        if (template) insertTemplate(field, template);
+        if (template) insertTemplate(template);
         return;
       }
 
@@ -98,7 +104,7 @@ export function useMathShortcuts(
       if (!direct) return;
       event.preventDefault();
       event.stopPropagation();
-      insertTemplate(field, direct);
+      insertTemplate(direct);
     };
 
     field.addEventListener("keydown", onKeyDown, true);

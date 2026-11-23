@@ -69,6 +69,37 @@ math-field.mt-math-field:focus {
   outline: none;
 }
 
+/*
+ * Empty-canvas hint. MathLive's latex `placeholder` collapses spaces in math
+ * mode ("Typeaformula") and `\text{…}` polluted Active Style — use CSS instead.
+ */
+math-field.mt-math-field[data-empty]::after {
+  content: "Type a formula";
+  position: absolute;
+  left: 12px;
+  top: 12px;
+  pointer-events: none;
+  color: #6a6a6a;
+  opacity: 0.55;
+  font-family: var(--mt-text-font);
+  font-style: normal;
+  font-weight: 400;
+  white-space: pre;
+  line-height: 1.2;
+}
+
+@media (min-width: 640px) {
+  math-field.mt-math-field[data-empty]::after {
+    left: 24px;
+    top: 20px;
+  }
+}
+
+/* Hide MathLive's built-in content placeholder when we drive the overlay. */
+math-field.mt-math-field::part(placeholder) {
+  display: none !important;
+}
+
 /* MathLive VK is unused — mobile uses the OS native keyboard via inputmode=text
    on `.ML__keyboard-sink`. Hide the panel + field-side toggle (toolbar covers insert). */
 math-field::part(menu-toggle),

@@ -14,6 +14,18 @@ const SCRIPT_COLLAPSED_MAP: ReadonlyArray<readonly [string, string]> = [
   ["_{#@}^{#?}", "_{#?}^{#?}"],
 ];
 
+/** True for superscript / subscript / subsup insert templates. */
+export function isScriptInsertTemplate(latex: string): boolean {
+  return (
+    latex === "^{#@}" ||
+    latex === "^{#?}" ||
+    latex === "_{#@}" ||
+    latex === "_{#?}" ||
+    latex === "_{#@}^{#?}" ||
+    latex === "_{#?}^{#?}"
+  );
+}
+
 /**
  * When `hasSelection` is false, rewrite superscript/subscript `#@` → `#?`.
  * Other templates (`\\frac{#@}{#?}`, fences, accents) keep `#@` (empty slot /
