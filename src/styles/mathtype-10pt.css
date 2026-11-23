@@ -5,7 +5,12 @@
  */
 
 :root {
-  --mt-font-family: "Times New Roman", "TeX Gyre Termes", "Liberation Serif", Times, serif;
+  /* Canonical faces — JS syncFontStyleToRoot() overwrites these live. */
+  --mt-math-font: "Times New Roman", "TeX Gyre Termes", "Liberation Serif", Times, serif;
+  --mt-text-font: "Times New Roman", "TeX Gyre Termes", "Liberation Serif", Times, serif;
+  --mt-math-font-family: var(--mt-math-font);
+  --mt-text-font-family: var(--mt-text-font);
+  --mt-font-family: var(--mt-math-font);
   --mt-style: Math;
   --mt-size-name: Full;
   --mt-full-pt: 10;
@@ -21,7 +26,7 @@
   --mt-selection-bg: #80ffff;
   --mt-empty-slot-color: #008000;
   --mt-view-size: calc(var(--mt-full-size) * var(--mt-zoom));
-  --text-font-family: var(--mt-font-family);
+  --text-font-family: var(--mt-text-font);
   color-scheme: light;
 }
 
@@ -36,9 +41,9 @@ math-field.mt-math-field {
   border: 0;
   background: #fff;
   color: #000;
-  font-family: var(--mt-font-family);
+  font-family: var(--mt-math-font);
   font-size: var(--mt-view-size);
-  --text-font-family: var(--mt-font-family);
+  --text-font-family: var(--mt-text-font);
   --selection-background-color: var(--mt-selection-bg);
   caret-color: #000;
 }

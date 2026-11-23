@@ -4,11 +4,16 @@ import "mathlive/static.css";
 import { ensureTexGyreTermesFonts } from "../styles/tex-gyre-termes";
 import "./export-formula.css";
 import { MT_FONT_LOAD_SPECS, MT_FONT_STACK } from "../styles/fontStack";
+import {
+  fontLoadSpecsFor,
+  fontStyleInlineVars,
+  mathFontStackFrom,
+  readFontStylePrefs,
+} from "../types/fontStyle";
 import { defaultStylePreset } from "../types/preset";
 
 /** Physical 10pt export size (editor zoom is view-only). */
 const EXPORT_FONT_PT = defaultStylePreset.fullPt;
-const FONT_FAMILY = MT_FONT_STACK;
 
 /** SPEC Phase 2: 4× High-DPI PNG locked to physical 10pt. */
 export const DEFAULT_EXPORT_SCALE = 4;
@@ -21,8 +26,8 @@ export function pxToPt(px: number): number {
   return Math.round(Math.max(0, px) * PX_TO_PT * 100) / 100;
 }
 
-/** Warm both the named Termes face and the TNR local()+url intercept. */
-const EXPORT_FONT_LOAD_SPECS = [
+/** Always warm Termes (+ TNR intercept) so Times defaults stay cross-platform. */
+const BASE_EXPORT_FONT_LOAD_SPECS = [
   ...MT_FONT_LOAD_SPECS,
   '10pt "Times New Roman"',
   'italic 10pt "Times New Roman"',
@@ -34,16 +39,16 @@ async function waitForFonts(): Promise<void> {
   if (typeof document === "undefined" || !document.fonts) return;
   ensureTexGyreTermesFonts();
   await document.fonts.ready;
-  await Promise.all(
-    EXPORT_FONT_LOAD_SPECS.map((spec) =>
-      document.fonts.load(spec).catch(() => [] as FontFace[]),
-    ),
-  );
+  const prefs = readFontStylePrefs();
+  const specs = [...BASE_EXPORT_FONT_LOAD_SPECS, ...fontLoadSpecsFor(prefs, EXPORT_FONT_PT)];
+  await Promise.all(specs.map((spec) => document.fonts.load(spec).catch(() => [] as FontFace[])));
 }
 
-/** Off-screen MathLive markup at 10pt Times, ready for raster / SVG capture. */
+/** Off-screen MathLive markup at 10pt, ready for raster / SVG capture. */
 export async function mountExportNode(latex: string): Promise<HTMLElement> {
   await waitForFonts();
+  const prefs = readFontStylePrefs();
+  const mathFamily = mathFontStackFrom(prefs) || MT_FONT_STACK;
   const host = document.createElement("div");
   host.setAttribute("data-mt-export-host", "1");
   // Inline line box so formula + baseline strut share one baseline (Word depth).
@@ -52,6 +57,8 @@ export async function mountExportNode(latex: string): Promise<HTMLElement> {
   const node = document.createElement("span");
   node.className = "mt-export-formula";
   // No padding — padding inflated Word display size and skewed depth.
+  // Inline --mt-math-font / --mt-text-font so html-to-image keeps faces even
+  // when the off-screen host does not inherit live :root updates reliably.
   node.style.cssText = [
     "display:inline-block",
     "padding:0",
@@ -59,7 +66,8 @@ export async function mountExportNode(latex: string): Promise<HTMLElement> {
     "border:0",
     "background:transparent",
     "color:#000",
-    `font-family:${FONT_FAMILY}`,
+    `font-family:${mathFamily}`,
+    fontStyleInlineVars(prefs),
     `font-size:${EXPORT_FONT_PT}pt`,
     "line-height:normal",
     "vertical-align:baseline",

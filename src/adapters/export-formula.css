@@ -1,10 +1,39 @@
-/* Off-screen export host: 10pt Times, transparent — mirrors MathMarkup fonts. */
+/*
+ * Off-screen export host (10pt). Faces come from inline --mt-math-font /
+ * --mt-text-font stamped by mountExportNode (mirrors :root). Do not redefine
+ * those vars here — a self-referential var() would drop the face.
+ */
+
 .mt-export-formula .ML__base,
 .mt-export-formula .ML__mathit,
 .mt-export-formula .ML__mathbf,
-.mt-export-formula .ML__cmr,
+.mt-export-formula .ML__mathbfit,
+.mt-export-formula .ML__cmr {
+  font-family: var(
+    --mt-math-font,
+    var(
+      --mt-math-font-family,
+      "Times New Roman",
+      "TeX Gyre Termes",
+      "Liberation Serif",
+      Times,
+      serif
+    )
+  ) !important;
+}
+
 .mt-export-formula .ML__text {
-  font-family: "Times New Roman", "TeX Gyre Termes", "Liberation Serif", Times, serif !important;
+  font-family: var(
+    --mt-text-font,
+    var(
+      --mt-text-font-family,
+      "Times New Roman",
+      "TeX Gyre Termes",
+      "Liberation Serif",
+      Times,
+      serif
+    )
+  ) !important;
 }
 
 .mt-export-formula .ML__mathit,
