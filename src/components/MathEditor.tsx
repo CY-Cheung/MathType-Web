@@ -10,11 +10,7 @@ import {
 
 const SHADOW_STYLE_ID = "mt-10pt-shadow";
 
-/**
- * Injected into the math-field shadow root. Variables, numbers, and text use
- * Times New Roman. Stretchy delimiters and large operators stay on MathLive's
- * fonts so the layout engine's glyph metrics still match what it positions.
- */
+/** Shadow CSS: Times for letters; stretchy glyphs stay on MathLive fonts. */
 export const MATHFIELD_SHADOW_CSS = `
 :host {
   --_text-font-family: var(--mt-font-family, "Times New Roman", "Liberation Serif", Times, serif);
@@ -84,8 +80,8 @@ export type { EditorSelection };
 
 export type MathEditorHandle = {
   insert: (latex: string, at?: EditorSelection | null) => void;
+  load: (latex: string) => void;
   capture: () => string;
-  /** Full field LaTeX (ignores selection) for clipboard export. */
   captureLatex: () => string;
   captureMathMl: () => string;
   captureSelection: () => EditorSelection;
@@ -142,6 +138,12 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
       if (!field) return;
       focusAt(field, at);
       field.executeCommand(["insert", toMathliveTemplate(latex)]);
+      field.focus();
+    },
+    load(latex: string) {
+      const field = fieldRef.current;
+      if (!field) return;
+      field.setValue(toMathliveTemplate(latex));
       field.focus();
     },
     capture() {
