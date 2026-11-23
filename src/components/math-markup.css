@@ -7,7 +7,31 @@
 .mt-markup .ML__mathit,
 .mt-markup .ML__mathbf,
 .mt-markup .ML__cmr {
-  font-family: "Times New Roman", "TeX Gyre Termes", "Liberation Serif", Times, serif !important;
+  font-family: var(
+    --mt-math-font,
+    var(
+      --mt-math-font-family,
+      "Times New Roman",
+      "TeX Gyre Termes",
+      "Liberation Serif",
+      Times,
+      serif
+    )
+  ) !important;
+}
+
+.mt-markup .ML__text {
+  font-family: var(
+    --mt-text-font,
+    var(
+      --mt-text-font-family,
+      "Times New Roman",
+      "TeX Gyre Termes",
+      "Liberation Serif",
+      Times,
+      serif
+    )
+  ) !important;
 }
 
 .mt-markup .ML__mathit {

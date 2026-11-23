@@ -2,13 +2,16 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { copyExport, type ExportFormat } from "./adapters/clipboard";
 import { parseEqHash } from "./adapters/eqHash";
 import { DocxBatchPanel } from "./components/DocxBatchPanel";
-import { MathEditor, type EditorSelection, type MathEditorHandle } from "./components/MathEditor";
 import { ExportMenu } from "./components/ExportMenu";
 import { FavoritesBar } from "./components/FavoritesBar";
+import { FontStyleDialog } from "./components/FontStyleDialog";
+import { MathEditor, type EditorSelection, type MathEditorHandle } from "./components/MathEditor";
 import { MatrixDialog } from "./components/MatrixDialog";
 import { Toolbar } from "./components/Toolbar";
 import { matrixToLatex, type MatrixSpec } from "./core/matrixTemplate";
 import { isExportShortcut, isMatrixDialogShortcut } from "./core/shortcuts";
+import { useFontStyle } from "./hooks/useFontStyle";
+import { fontFaceLabel } from "./types/fontStyle";
 import { STATUS_BAR_LABEL } from "./types/preset";
 
 const TOAST_MS = 2400;
@@ -27,6 +30,15 @@ export default function App() {
   const [exportBusy, setExportBusy] = useState(false);
   const [matrixOpen, setMatrixOpen] = useState(false);
   const [batchOpen, setBatchOpen] = useState(false);
+  const [fontOpen, setFontOpen] = useState(false);
+  const {
+    prefs: fontPrefs,
+    mathFontStack,
+    textFontStack,
+    setMathFontId,
+    setTextFontId,
+    reset: resetFonts,
+  } = useFontStyle();
 
   const showToast = useCallback((message: string) => {
     setToast(message);
@@ -124,7 +136,8 @@ export default function App() {
     };
   }, [showToast]);
 
-  const status = toast || chordStatus || STATUS_BAR_LABEL;
+const fontStatus = `Math: ${fontFaceLabel(fontPrefs.mathFontId)} · Text: ${fontFaceLabel(fontPrefs.textFontId)}`;
+  const status = toast || chordStatus || `${STATUS_BAR_LABEL} · ${fontStatus}`;
 
   return (
     <div className="flex h-dvh flex-col bg-[#d4d4d4] sm:p-4">
@@ -134,6 +147,17 @@ export default function App() {
             <Toolbar onInsert={(latex) => editorRef.current?.insert(latex)} onOpenMatrix={openMatrix} />
           </div>
           <div className="flex shrink-0 items-center gap-1 py-1.5">
+            <button
+              type="button"
+              title="Style / Font Settings（樣式／字體設定）"
+              className={`h-7 border border-[#9a9a9a] px-2 text-[12px] leading-none hover:bg-white ${
+                fontOpen ? "bg-white" : "bg-[#f7f7f7]"
+              }`}
+              onMouseDown={keepFocus}
+              onClick={() => setFontOpen(true)}
+            >
+              Style…
+            </button>
             <button
               type="button"
               title="Batch .docx — scan formulas (Phase 3 Step 1)"
@@ -154,7 +178,13 @@ export default function App() {
           onCapture={() => editorRef.current?.capture() ?? ""}
         />
         <main className="relative min-h-0 flex-1">
-          <MathEditor ref={editorRef} onChordStatus={setChordStatus} onMatrixDialog={openMatrix} />
+          <MathEditor
+            ref={editorRef}
+            mathFontStack={mathFontStack}
+            textFontStack={textFontStack}
+            onChordStatus={setChordStatus}
+            onMatrixDialog={openMatrix}
+          />
           {batchOpen ? (
             <DocxBatchPanel
               onClose={() => setBatchOpen(false)}
@@ -177,6 +207,18 @@ export default function App() {
         </footer>
       </div>
       {matrixOpen ? <MatrixDialog onCancel={closeMatrix} onConfirm={confirmMatrix} /> : null}
+      {fontOpen ? (
+        <FontStyleDialog
+          prefs={fontPrefs}
+          onMathFontChange={setMathFontId}
+          onTextFontChange={setTextFontId}
+          onReset={() => {
+            resetFonts();
+            showToast("Fonts reset to default");
+          }}
+          onClose={() => setFontOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }

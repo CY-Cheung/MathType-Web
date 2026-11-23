@@ -7,20 +7,26 @@ import {
   defaultStylePreset,
   type StylePreset,
 } from "../types/preset";
+import { MT_FONT_STACK } from "../styles/fontStack";
 
 const SHADOW_STYLE_ID = "mt-10pt-shadow";
 
-/** Shadow CSS: Times for letters; stretchy glyphs stay on MathLive fonts. */
+/**
+ * Shadow CSS: Math / Text letter faces via CSS vars.
+ * Stretchy KaTeX / MathLive symbol fonts are intentionally untouched.
+ */
 export const MATHFIELD_SHADOW_CSS = `
 :host {
-  --_text-font-family: var(--mt-font-family, "Times New Roman", "TeX Gyre Termes", "Liberation Serif", Times, serif);
-  font-family: var(--mt-font-family, "Times New Roman", "TeX Gyre Termes", "Liberation Serif", Times, serif);
+  --_text-font-family: var(--mt-text-font, var(--mt-text-font-family, var(--mt-math-font, ${MT_FONT_STACK})));
+  font-family: var(--mt-math-font, var(--mt-math-font-family, ${MT_FONT_STACK}));
 }
 .ML__cmr,
 .ML__mathbf,
-.ML__text,
 .ML__content-placeholder {
-  font-family: var(--mt-font-family, "Times New Roman", "TeX Gyre Termes", "Liberation Serif", Times, serif) !important;
+  font-family: var(--mt-math-font, var(--mt-math-font-family, ${MT_FONT_STACK})) !important;
+}
+.ML__text {
+  font-family: var(--mt-text-font, var(--mt-text-font-family, var(--mt-math-font, ${MT_FONT_STACK}))) !important;
 }
 /* MathLive 0.111 draws \\placeholder{} as U+25A2 on span.ML__cmr. */
 .mt-empty-slot {
@@ -39,7 +45,7 @@ export const MATHFIELD_SHADOW_CSS = `
 .ML__mathit,
 .ML__mathbfit,
 .lcGreek.ML__mathbf {
-  font-family: var(--mt-font-family, "Times New Roman", "TeX Gyre Termes", "Liberation Serif", Times, serif) !important;
+  font-family: var(--mt-math-font, var(--mt-math-font-family, ${MT_FONT_STACK})) !important;
   font-style: italic;
 }
 .ML__virtual-keyboard-toggle,
@@ -47,10 +53,6 @@ export const MATHFIELD_SHADOW_CSS = `
   display: none !important;
 }
 `;
-
-function fontStack(fontFamily: string): string {
-  return `"${fontFamily}", "TeX Gyre Termes", "Liberation Serif", Times, serif`;
-}
 
 const EMPTY_SLOT = "\u25A2";
 
@@ -72,6 +74,10 @@ function applyShadowStyle(field: MathfieldElement): void {
 
 type MathEditorProps = {
   preset?: StylePreset;
+  /** CSS font-family stack for math letters (variables, digits). */
+  mathFontStack?: string;
+  /** CSS font-family stack for `\\text{}` / text mode. */
+  textFontStack?: string;
   onChordStatus?: (status: string) => void;
   onMatrixDialog?: () => void;
 };
@@ -89,10 +95,20 @@ export type MathEditorHandle = {
 };
 
 export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
-  function MathEditor({ preset = defaultStylePreset, onChordStatus, onMatrixDialog }, ref) {
+  function MathEditor(
+    {
+      preset = defaultStylePreset,
+      mathFontStack,
+      textFontStack,
+      onChordStatus,
+      onMatrixDialog,
+    },
+    ref,
+  ) {
   const fieldRef = useRef<MathfieldElement>(null);
   const { chordStatus } = useMathShortcuts(fieldRef, onMatrixDialog);
-  const family = fontStack(preset.fontFamily);
+  const mathFamily = mathFontStack ?? MT_FONT_STACK;
+  const textFamily = textFontStack ?? mathFamily;
   const viewSize = `calc(${preset.fullPt}pt * ${preset.zoomPercent} / 100)`;
 
   useEffect(() => {
@@ -175,9 +191,13 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
       aria-label="Math editor"
       math-virtual-keyboard-policy="manual"
       style={{
-        fontFamily: family,
+        fontFamily: mathFamily,
         fontSize: viewSize,
-        ["--mt-font-family" as string]: family,
+        ["--mt-math-font" as string]: mathFamily,
+        ["--mt-text-font" as string]: textFamily,
+        ["--mt-math-font-family" as string]: mathFamily,
+        ["--mt-text-font-family" as string]: textFamily,
+        ["--mt-font-family" as string]: mathFamily,
         ["--mt-full-size" as string]: `${preset.fullPt}pt`,
         ["--mt-script-size" as string]: `${preset.subSupPt}pt`,
         ["--mt-scriptscript-size" as string]: `${preset.subSubSupPt}pt`,
@@ -189,7 +209,7 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
         ["--selection-background-color" as string]: "#80ffff",
         ["--mt-zoom" as string]: String(preset.zoomPercent / 100),
         ["--mt-view-size" as string]: viewSize,
-        ["--text-font-family" as string]: family,
+        ["--text-font-family" as string]: textFamily,
       }}
     />
   );

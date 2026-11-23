@@ -52,7 +52,10 @@ export function MathMarkup({ latex, className }: MathMarkupProps) {
   return (
     <span
       className={`mt-markup pointer-events-none inline-flex items-center justify-center leading-none ${className ?? ""}`}
-      style={{ fontFamily: '"Times New Roman", "TeX Gyre Termes", "Liberation Serif", Times, serif' }}
+      style={{
+        fontFamily:
+          'var(--mt-math-font, var(--mt-math-font-family, "Times New Roman", "TeX Gyre Termes", "Liberation Serif", Times, serif))',
+      }}
       dangerouslySetInnerHTML={{ __html: html }}
     />
   );
