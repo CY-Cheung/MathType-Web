@@ -111,14 +111,21 @@ const NO_LINK_DECORATION =
 
 /**
  * Word applies `span.MsoHyperlink { text-decoration:underline }` on paste.
- * Override that character style in a head `<style>` (Office HTML idiom).
+ * Keep this compact (no newlines) — lives in `<head>`, outside the fragment.
  */
-const WORD_NO_UNDERLINE_STYLE = `<style><!--
-a:link, a:visited, span.MsoHyperlink, span.MsoHyperlinkFollowed {
-  color:windowtext; text-decoration:none; text-underline:none;
-}
-a img, span.MsoHyperlink img { border:none; text-decoration:none; }
---></style>`;
+const WORD_NO_UNDERLINE_STYLE =
+  "<style><!--" +
+  "a:link,a:visited,span.MsoHyperlink,span.MsoHyperlinkFollowed{" +
+  "color:windowtext;text-decoration:none;text-underline:none;}" +
+  "a img,span.MsoHyperlink img{border:none;text-decoration:none;}" +
+  "--></style>";
+
+/**
+ * After the lowered equation run, Word otherwise keeps typing on the same
+ * shifted / hyperlink character style. A ZWSP reset run restores 0pt baseline.
+ */
+export const WORD_BASELINE_RESET_SPAN =
+  '<span style="vertical-align:0pt;mso-text-raise:0pt;text-decoration:none;color:windowtext;">&#8203;</span>';
 
 /**
  * Word HTML → OOXML baseline shift.
@@ -133,17 +140,9 @@ export function wordBaselineShiftStyle(depthPt: number): string {
 }
 
 /**
- * SPEC: 4× PNG inside inline `<span><a href="#eq=…"><img></a></span>`.
- * No `<p>` — pasting mid-sentence must not force a paragraph break.
- *
- * Baseline shift (measured depth → pt) is stamped on **span + a + img**,
- * matching the early working `test.html` pattern where valign on `<a>`
- * was required for Word to actually lower the picture.
- *
- * Display size: HTML width/height attrs in CSS px (10pt face) plus style pt,
- * so Word keeps the correct size without eating the 4× bitmap pixels.
+ * Pure inline equation markup (no fragment markers) — shifted span+a+img.
  */
-export function wrapPngForWord(latex: string, raster: RasterResult): string {
+export function buildInlinePngEquationHtml(latex: string, raster: RasterResult): string {
   const href = buildEqHref(latex).replace(/"/g, "&quot;");
   const widthPt = raster.widthPt > 0 ? raster.widthPt : Math.round(raster.cssWidth * 0.75 * 100) / 100;
   const heightPt = raster.heightPt > 0 ? raster.heightPt : Math.round(raster.cssHeight * 0.75 * 100) / 100;
@@ -161,11 +160,26 @@ export function wrapPngForWord(latex: string, raster: RasterResult): string {
   const anchorStyle = `${shift}${NO_LINK_DECORATION}color:windowtext;`;
   const spanStyle = `${shift}${NO_LINK_DECORATION}color:windowtext;`;
 
-  // Inline only — span wraps a so Word still has a character-run to raise.
+  return `<span style="${spanStyle}"><a href="${href}" style="${anchorStyle}">${img}</a></span>`;
+}
+
+/**
+ * SPEC: 4× PNG as a Word CF_HTML **inline fragment**.
+ *
+ * - `<!--StartFragment-->` … `<!--EndFragment-->` with **only** inline nodes
+ *   (no `<p>` / `<div>` / `<br>` / newlines inside the fragment) so mid-sentence
+ *   paste does not split the paragraph.
+ * - Equation span carries measured `vertical-align` / `mso-text-raise`.
+ * - Immediately after it, a 0pt reset ZWSP span so continued typing returns to
+ *   the normal baseline (and does not inherit hyperlink styling).
+ */
+export function wrapPngForWord(latex: string, raster: RasterResult): string {
+  const equation = buildInlinePngEquationHtml(latex, raster);
+  // Single continuous fragment string — no whitespace/newlines between markers.
+  const fragment = `<!--StartFragment-->${equation}${WORD_BASELINE_RESET_SPAN}<!--EndFragment-->`;
   return (
-    `<!DOCTYPE html><html><head><meta charset="utf-8">${WORD_NO_UNDERLINE_STYLE}</head><body>` +
-    `<span style="${spanStyle}"><a href="${href}" style="${anchorStyle}">${img}</a></span>` +
-    `</body></html>`
+    `<!DOCTYPE html><html><head><meta charset="utf-8">${WORD_NO_UNDERLINE_STYLE}</head>` +
+    `<body>${fragment}</body></html>`
   );
 }
 
