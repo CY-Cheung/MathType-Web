@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { MathMarkup } from "./MathMarkup";
 import { MATRIX_DIALOG_SHORTCUT } from "../core/shortcuts";
 import {
@@ -8,6 +8,7 @@ import {
   type ToolbarItem,
   type ToolbarPalette,
 } from "../data/toolbarItems";
+import { FloatingPortal } from "./FloatingPortal";
 
 type ToolbarProps = {
   onInsert: (latex: string) => void;
@@ -49,19 +50,23 @@ function PaletteButton({
   palette,
   open,
   onToggle,
+  onClose,
   onInsert,
   onOpenMatrix,
 }: {
   palette: ToolbarPalette;
   open: boolean;
   onToggle: () => void;
+  onClose: () => void;
   onInsert: (latex: string) => void;
   onOpenMatrix?: () => void;
 }) {
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const icon = palette.icon ?? palette.items[0]?.latex ?? "";
   return (
     <div className="relative">
       <button
+        ref={triggerRef}
         type="button"
         title={palette.label}
         aria-expanded={open}
@@ -75,50 +80,35 @@ function PaletteButton({
       >
         <MathMarkup latex={icon} className="text-[15px]" />
       </button>
-      {open ? (
-        <div className="absolute left-0 top-full z-40 mt-px grid w-max grid-cols-4 gap-px border border-[#999] bg-[#d7d7d7] p-px shadow-[0_4px_12px_rgba(0,0,0,0.18)]">
-          {palette.items.map((entry) => (
-            <ItemButton key={entry.id} entry={entry} onInsert={onInsert} />
-          ))}
-          {onOpenMatrix ? (
-            <button
-              type="button"
-              title={`Insert Matrix... / 自訂矩陣 (${MATRIX_DIALOG_SHORTCUT})`}
-              className="col-span-4 h-8 bg-white px-2 text-left text-[12px] leading-none hover:bg-[#f4f7fb]"
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={onOpenMatrix}
-            >
-              Insert Matrix... / 自訂矩陣
-            </button>
-          ) : null}
-        </div>
-      ) : null}
+      <FloatingPortal
+        open={open}
+        anchorRef={triggerRef}
+        onClose={onClose}
+        align="start"
+        zIndex={65}
+        className="grid w-max grid-cols-4 gap-px border border-[#999] bg-[#d7d7d7] p-px shadow-[0_4px_12px_rgba(0,0,0,0.18)]"
+      >
+        {palette.items.map((entry) => (
+          <ItemButton key={entry.id} entry={entry} onInsert={onInsert} />
+        ))}
+        {onOpenMatrix ? (
+          <button
+            type="button"
+            title={`Insert Matrix... / 自訂矩陣 (${MATRIX_DIALOG_SHORTCUT})`}
+            className="col-span-4 h-8 bg-white px-2 text-left text-[12px] leading-none hover:bg-[#f4f7fb]"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={onOpenMatrix}
+          >
+            Insert Matrix... / 自訂矩陣
+          </button>
+        ) : null}
+      </FloatingPortal>
     </div>
   );
 }
 
 export function Toolbar({ onInsert, onOpenMatrix }: ToolbarProps) {
-  const rootRef = useRef<HTMLDivElement>(null);
   const [openId, setOpenId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!openId) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      event.stopPropagation();
-      setOpenId(null);
-    };
-    const onPointer = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpenId(null);
-    };
-    window.addEventListener("keydown", onKey, true);
-    window.addEventListener("pointerdown", onPointer);
-    return () => {
-      window.removeEventListener("keydown", onKey, true);
-      window.removeEventListener("pointerdown", onPointer);
-    };
-  }, [openId]);
 
   const insertAndClose = (latex: string) => {
     onInsert(latex);
@@ -133,6 +123,7 @@ export function Toolbar({ onInsert, onOpenMatrix }: ToolbarProps) {
           palette={palette}
           open={openId === palette.id}
           onToggle={() => setOpenId((current) => (current === palette.id ? null : palette.id))}
+          onClose={() => setOpenId(null)}
           onInsert={insertAndClose}
           onOpenMatrix={
             palette.id === "matrices"
@@ -148,10 +139,7 @@ export function Toolbar({ onInsert, onOpenMatrix }: ToolbarProps) {
   );
 
   return (
-    <div
-      ref={rootRef}
-      className="min-w-0 shrink-0 bg-transparent px-1 py-0.5 text-[#222]"
-    >
+    <div className="min-w-0 shrink-0 bg-transparent px-1 py-0.5 text-[#222]">
       {row(symbolPalettes)}
       {row(templatePalettes)}
     </div>

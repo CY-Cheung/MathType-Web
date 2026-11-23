@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import {
   ACTIVE_STYLE_ORDER,
   type ActiveStyleId,
@@ -7,6 +7,7 @@ import {
   isWorkspaceZoomPreset,
   WORKSPACE_ZOOM_PRESETS,
 } from "../types/workspaceZoom";
+import { FloatingPortal } from "./FloatingPortal";
 
 export type MenuBarEditAction =
   | "undo"
@@ -49,9 +50,104 @@ function keepFocus(event: { preventDefault: () => void }): void {
   event.preventDefault();
 }
 
+function MenuDropdown({
+  menu,
+  open,
+  menuDomId,
+  onOpen,
+  onClose,
+  anyOpen,
+}: {
+  menu: MenuDef;
+  open: boolean;
+  menuDomId: string;
+  onOpen: () => void;
+  onClose: () => void;
+  anyOpen: boolean;
+}) {
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  return (
+    <div className="relative shrink-0">
+      <button
+        ref={triggerRef}
+        type="button"
+        role="menuitem"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={menuDomId}
+        className={`h-full px-2.5 leading-none hover:bg-[#dce8f8] ${
+          open ? "bg-[#dce8f8]" : ""
+        }`}
+        onMouseDown={keepFocus}
+        onClick={() => (open ? onClose() : onOpen())}
+        onMouseEnter={() => {
+          if (anyOpen) onOpen();
+        }}
+      >
+        {menu.label}
+      </button>
+      <FloatingPortal
+        open={open}
+        anchorRef={triggerRef}
+        onClose={onClose}
+        id={menuDomId}
+        role="menu"
+        align="start"
+        zIndex={70}
+        className="min-w-[12.5rem] border border-[#7a7a7a] bg-[#f7f7f7] py-0.5 shadow-[0_4px_12px_rgba(0,0,0,0.18)]"
+      >
+        {menu.items.map((item) => {
+          if (item.kind === "separator") {
+            return (
+              <div
+                key={item.id}
+                role="separator"
+                className="my-0.5 border-t border-[#c0c0c0]"
+              />
+            );
+          }
+          const disabled = Boolean(item.disabled);
+          return (
+            <button
+              key={item.id}
+              type="button"
+              role="menuitem"
+              aria-checked={item.checked}
+              disabled={disabled}
+              className={`flex w-full items-center justify-between gap-4 px-2.5 py-1 text-left text-[12px] ${
+                disabled
+                  ? "cursor-default text-[#9a9a9a]"
+                  : "text-[#1a1a1a] hover:bg-[#dce8f8]"
+              } ${item.checked && !disabled ? "font-semibold" : ""}`}
+              onMouseDown={keepFocus}
+              onClick={() => {
+                if (disabled) return;
+                item.onSelect?.();
+              }}
+            >
+              <span className="inline-flex items-center gap-1.5">
+                <span className="inline-block w-3 text-center text-[10px]">
+                  {item.checked ? "✓" : ""}
+                </span>
+                {item.label}
+              </span>
+              {item.shortcut ? (
+                <span className="text-[10px] font-normal text-[#666]">
+                  {item.shortcut}
+                </span>
+              ) : null}
+            </button>
+          );
+        })}
+      </FloatingPortal>
+    </div>
+  );
+}
+
 /**
  * MathType 6.9b–style top menu bar (File / Edit / View / …).
- * Wired items call existing app handlers; unimplemented entries stay disabled.
+ * Dropdowns portal to document.body so overflow-x-auto on the bar cannot clip them.
  */
 export function MenuBar({
   activeStyle,
@@ -62,25 +158,8 @@ export function MenuBar({
   onEdit,
   onExportMathMl,
 }: MenuBarProps) {
-  const rootRef = useRef<HTMLDivElement>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const baseId = useId();
-
-  useEffect(() => {
-    if (!openId) return;
-    const onDoc = (event: MouseEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpenId(null);
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpenId(null);
-    };
-    document.addEventListener("mousedown", onDoc);
-    window.addEventListener("keydown", onKey, true);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      window.removeEventListener("keydown", onKey, true);
-    };
-  }, [openId]);
 
   const close = () => setOpenId(null);
 
@@ -331,87 +410,21 @@ export function MenuBar({
 
   return (
     <div
-      ref={rootRef}
       data-testid="menubar"
       className="flex h-6 shrink-0 items-stretch overflow-x-auto border-b border-[#b5b5b5] bg-[#f3f3f3] px-0.5 font-sans text-[12px] text-[#1a1a1a]"
       role="menubar"
     >
-      {menus.map((menu) => {
-        const open = openId === menu.id;
-        const menuDomId = `${baseId}-${menu.id}`;
-        return (
-          <div key={menu.id} className="relative shrink-0">
-            <button
-              type="button"
-              role="menuitem"
-              aria-haspopup="menu"
-              aria-expanded={open}
-              aria-controls={menuDomId}
-              className={`h-full px-2.5 leading-none hover:bg-[#dce8f8] ${
-                open ? "bg-[#dce8f8]" : ""
-              }`}
-              onMouseDown={keepFocus}
-              onClick={() => setOpenId((cur) => (cur === menu.id ? null : menu.id))}
-              onMouseEnter={() => {
-                if (openId) setOpenId(menu.id);
-              }}
-            >
-              {menu.label}
-            </button>
-            {open ? (
-              <div
-                id={menuDomId}
-                role="menu"
-                className="absolute left-0 top-full z-[60] mt-px min-w-[12.5rem] border border-[#7a7a7a] bg-[#f7f7f7] py-0.5 shadow-[0_4px_12px_rgba(0,0,0,0.18)]"
-              >
-                {menu.items.map((item) => {
-                  if (item.kind === "separator") {
-                    return (
-                      <div
-                        key={item.id}
-                        role="separator"
-                        className="my-0.5 border-t border-[#c0c0c0]"
-                      />
-                    );
-                  }
-                  const disabled = Boolean(item.disabled);
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      role="menuitem"
-                      aria-checked={item.checked}
-                      disabled={disabled}
-                      className={`flex w-full items-center justify-between gap-4 px-2.5 py-1 text-left text-[12px] ${
-                        disabled
-                          ? "cursor-default text-[#9a9a9a]"
-                          : "text-[#1a1a1a] hover:bg-[#dce8f8]"
-                      } ${item.checked && !disabled ? "font-semibold" : ""}`}
-                      onMouseDown={keepFocus}
-                      onClick={() => {
-                        if (disabled) return;
-                        item.onSelect?.();
-                      }}
-                    >
-                      <span className="inline-flex items-center gap-1.5">
-                        <span className="inline-block w-3 text-center text-[10px]">
-                          {item.checked ? "✓" : ""}
-                        </span>
-                        {item.label}
-                      </span>
-                      {item.shortcut ? (
-                        <span className="text-[10px] font-normal text-[#666]">
-                          {item.shortcut}
-                        </span>
-                      ) : null}
-                    </button>
-                  );
-                })}
-              </div>
-            ) : null}
-          </div>
-        );
-      })}
+      {menus.map((menu) => (
+        <MenuDropdown
+          key={menu.id}
+          menu={menu}
+          open={openId === menu.id}
+          menuDomId={`${baseId}-${menu.id}`}
+          anyOpen={openId != null}
+          onOpen={() => setOpenId(menu.id)}
+          onClose={close}
+        />
+      ))}
     </div>
   );
 }
