@@ -108,17 +108,37 @@ export async function copyMathMl(latex: string): Promise<ClipboardExportResult> 
   return writeLatexFallback(latex, "MathML write failed");
 }
 
-/** SPEC: 4× PNG inside `<a href="…#eq=…">` with dynamic baseline offset. */
+/** Inline styles that stop Word from drawing a hyperlink underline on the eq image. */
+const NO_LINK_DECORATION =
+  "text-decoration:none;border:none;border-bottom:none;outline:none;box-shadow:none;";
+
+/**
+ * SPEC: 4× PNG inside `<a href="…#eq=…">` with dynamic baseline offset.
+ * Dimensions are emitted in pt so Word keeps the 10pt face size; vertical-align
+ * uses measured depth so the math axis lines up with body text.
+ */
 export function wrapPngForWord(latex: string, raster: RasterResult): string {
   const href = buildEqHref(latex).replace(/"/g, "&quot;");
+  const widthPt = raster.widthPt > 0 ? raster.widthPt : Math.round(raster.cssWidth * 0.75 * 100) / 100;
+  const heightPt = raster.heightPt > 0 ? raster.heightPt : Math.round(raster.cssHeight * 0.75 * 100) / 100;
+  const widthPx = Math.max(1, Math.round(raster.cssWidth));
+  const heightPx = Math.max(1, Math.round(raster.cssHeight));
   const align =
     raster.baselinePt > 0
       ? `vertical-align:-${raster.baselinePt}pt;`
       : "vertical-align:baseline;";
+  const imgStyle =
+    `width:${widthPt}pt;height:${heightPt}pt;${align}` +
+    `${NO_LINK_DECORATION}display:inline;`;
   const img =
-    `<img src="${raster.dataUrl}" width="${raster.cssWidth}" height="${raster.cssHeight}" ` +
-    `style="${align}" alt="equation" />`;
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body><a href="${href}">${img}</a></body></html>`;
+    `<img src="${raster.dataUrl}" width="${widthPx}" height="${heightPx}" ` +
+    `style="${imgStyle}" alt="equation" />`;
+  const anchorStyle = `${NO_LINK_DECORATION}color:windowtext;`;
+  return (
+    `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>` +
+    `<a href="${href}" style="${anchorStyle}">${img}</a>` +
+    `</body></html>`
+  );
 }
 
 export async function copyPng(
@@ -135,10 +155,12 @@ export async function copyPng(
       throw new Error("PNG empty");
     }
     const html = wrapPngForWord(latex, raster);
+    // Prefer HTML (sized in pt + vertical-align + no underline) for Word.
+    // Raw image/png alone would paste at 4× bitmap pixels and float the baseline.
     try {
       await writeClipboardItems({
-        "image/png": raster.blob,
         "text/html": new Blob([html], { type: "text/html" }),
+        "image/png": raster.blob,
         "text/plain": new Blob([latex], { type: "text/plain" }),
       });
     } catch {
