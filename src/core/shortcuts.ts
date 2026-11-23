@@ -168,3 +168,18 @@ export function isMathStyleShortcut(event: KeyboardEvent): boolean {
   if (event.repeat || event.altKey || event.metaKey || !event.ctrlKey || !event.shiftKey) return false;
   return event.code === "Equal" || event.code === "NumpadEqual" || event.code === "KeyM";
 }
+
+/**
+ * Workspace view zoom presets (display only).
+ * Ctrl+1 / Ctrl+2 / Ctrl+4 — free of formula chords (those use letters / 9 / brackets).
+ */
+export function workspaceZoomShortcutPercent(event: KeyboardEvent): number | null {
+  if (event.repeat || event.altKey || event.metaKey || event.shiftKey || !event.ctrlKey) {
+    return null;
+  }
+  if (event.code === "Digit1" || event.code === "Numpad1") return 100;
+  if (event.code === "Digit2" || event.code === "Numpad2") return 200;
+  if (event.code === "Digit3" || event.code === "Numpad3") return 300;
+  if (event.code === "Digit4" || event.code === "Numpad4") return 400;
+  return null;
+}
