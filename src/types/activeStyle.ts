@@ -10,6 +10,8 @@ export type ActiveStyleId =
   | "text"
   | "function"
   | "variable"
+  | "lcGreek"
+  | "ucGreek"
   | "vectorMatrix"
   | "user1"
   | "user2";
@@ -27,6 +29,8 @@ export const ACTIVE_STYLE_ORDER: readonly ActiveStyleMeta[] = [
   { id: "text", label: "Text", shortcut: "Ctrl+Shift+E" },
   { id: "function", label: "Function" },
   { id: "variable", label: "Variable" },
+  { id: "lcGreek", label: "L.C. Greek" },
+  { id: "ucGreek", label: "U.C. Greek" },
   { id: "vectorMatrix", label: "Vector-Matrix" },
   { id: "user1", label: "User 1" },
   { id: "user2", label: "User 2" },
@@ -81,6 +85,16 @@ export function mathLiveStyleFor(id: ActiveStyleId): Style {
         fontFamily: "none",
       };
     case "variable":
+      return {
+        variant: "normal",
+        variantStyle: "italic",
+        fontShape: "it",
+        fontSeries: "m",
+        fontFamily: "none",
+      };
+    case "lcGreek":
+    case "ucGreek":
+      // Italic math letters; face comes from Define Styles Greek CSS classes.
       return {
         variant: "normal",
         variantStyle: "italic",
@@ -143,9 +157,11 @@ export function inferActiveStyleFromAtom(
   return fallback;
 }
 
-/** CSS class stamped via `\\class{...}{...}` for Function / User faces. */
+/** CSS class stamped via `\\class{...}{...}` for Function / User / Greek faces. */
 export const ACTIVE_STYLE_CLASS: Partial<Record<ActiveStyleId, string>> = {
   function: "mt-ds-fn",
+  lcGreek: "mt-ds-lcGreek",
+  ucGreek: "mt-ds-ucGreek",
   user1: "mt-ds-user1",
   user2: "mt-ds-user2",
 };

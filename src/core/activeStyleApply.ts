@@ -131,6 +131,8 @@ export function applyActiveStyleToField(
     // Wrap selection so export / canvas CSS can target the face.
     if (id === "function") {
       field.executeCommand(["insert", `\\class{${className}}{\\mathrm{#@}}`]);
+    } else if (id === "lcGreek" || id === "ucGreek") {
+      field.executeCommand(["insert", `\\class{${className}}{#@}`]);
     } else if (id === "user1") {
       field.executeCommand(["insert", `\\class{${className}}{\\mathtt{#@}}`]);
     } else if (id === "user2") {

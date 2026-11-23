@@ -6,6 +6,7 @@ import { DocxBatchPanel } from "./components/DocxBatchPanel";
 import { ExportMenu } from "./components/ExportMenu";
 import { FavoritesBar } from "./components/FavoritesBar";
 import { MathEditor, type EditorSelection, type MathEditorHandle } from "./components/MathEditor";
+import { MenuBar, type MenuBarEditAction } from "./components/MenuBar";
 import { MatrixDialog } from "./components/MatrixDialog";
 import { StyleSwitcher } from "./components/StyleSwitcher";
 import { Toolbar } from "./components/Toolbar";
@@ -115,6 +116,25 @@ export default function App() {
     [exportBusy, showToast],
   );
 
+  const runEdit = useCallback(
+    (action: MenuBarEditAction) => {
+      const editor = editorRef.current;
+      if (!editor) return;
+      const map: Record<MenuBarEditAction, string> = {
+        undo: "undo",
+        redo: "redo",
+        cut: "cutToClipboard",
+        copy: "copyToClipboard",
+        paste: "pasteFromClipboard",
+        selectAll: "selectAll",
+        clear: "deleteAll",
+      };
+      editor.executeCommand(map[action]);
+      if (action === "clear") showToast("Cleared");
+    },
+    [showToast],
+  );
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (matrixOpenRef.current || stylesOpen) return;
@@ -195,18 +215,22 @@ export default function App() {
   const statusBase = toast || chordStatus || `${sizeHint} · ${faceHint}`;
 
   return (
-    <div className="flex h-dvh flex-col bg-[#d4d4d4] sm:p-4">
-      <div className="relative flex min-h-0 flex-1 flex-col border border-[#b4b4b4] bg-white shadow-sm">
-        <div className="flex items-start justify-between gap-2 border-b border-[#b5b5b5] bg-[#e6e6e6] pr-1">
-          <div className="min-w-0 flex-1">
+    <div className="flex h-dvh w-full max-w-[100vw] flex-col overflow-x-hidden bg-[#d4d4d4] sm:p-4">
+      <div className="relative flex min-h-0 w-full max-w-full flex-1 flex-col overflow-hidden border border-[#b4b4b4] bg-white shadow-sm">
+        <MenuBar
+          activeStyle={activeStyle}
+          zoomPercent={zoomPercent}
+          onActiveStyleChange={changeActiveStyle}
+          onZoomChange={changeZoom}
+          onOpenDefineStyles={() => setStylesOpen(true)}
+          onEdit={runEdit}
+          onExportMathMl={() => void runExport("mathml")}
+        />
+        <div className="flex min-w-0 items-stretch gap-1 border-b border-[#b5b5b5] bg-[#e6e6e6] pr-1">
+          <div className="min-w-0 flex-1 overflow-x-auto">
             <Toolbar onInsert={(latex) => editorRef.current?.insert(latex)} onOpenMatrix={openMatrix} />
           </div>
-          <div className="flex shrink-0 items-center gap-1 py-1.5">
-            <StyleSwitcher
-              activeStyle={activeStyle}
-              onChange={changeActiveStyle}
-              onOpenDefineStyles={() => setStylesOpen(true)}
-            />
+          <div className="flex shrink-0 items-center gap-1 self-start py-1.5">
             <button
               type="button"
               title="Batch .docx — scan formulas (Phase 3 Step 1)"
@@ -216,9 +240,8 @@ export default function App() {
               onMouseDown={keepFocus}
               onClick={() => setBatchOpen((open) => !open)}
             >
-              Batch .docx
+              Batch
             </button>
-            <span className="hidden text-[10px] text-[#666] sm:inline">Ctrl+Shift+C</span>
             <ExportMenu busy={exportBusy} onExport={(format) => void runExport(format)} />
           </div>
         </div>
@@ -226,7 +249,7 @@ export default function App() {
           onInsert={(latex) => editorRef.current?.insert(latex)}
           onCapture={() => editorRef.current?.capture() ?? ""}
         />
-        <main className="relative min-h-0 flex-1">
+        <main className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
           <MathEditor
             ref={editorRef}
             preset={preset}
@@ -245,7 +268,7 @@ export default function App() {
             />
           ) : null}
         </main>
-        <footer className="relative flex items-center justify-between gap-2 border-t border-[#c6c6c6] bg-[#f3f3f3] px-2 py-1.5 font-sans text-[12px] leading-snug text-[#1a1a1a]">
+        <footer className="relative flex min-w-0 items-center justify-between gap-2 border-t border-[#c6c6c6] bg-[#f3f3f3] px-2 py-1.5 font-sans text-[12px] leading-snug text-[#1a1a1a]">
           <div className="min-w-0 flex-1 truncate">{statusBase}</div>
           <div className="flex shrink-0 items-center gap-1">
             <ZoomSwitcher zoomPercent={zoomPercent} onChange={changeZoom} />

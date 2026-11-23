@@ -429,13 +429,32 @@ ${p}.mt-ds-user2 .ML__mathit {
 }
 ${p}.lcGreek,
 ${p}.lcGreek.ML__mathit,
-${p}.lcGreek.ML__mathbf {
+${p}.lcGreek.ML__mathbf,
+${p}.mt-ds-lcGreek,
+${p}.mt-ds-lcGreek .ML__mathit,
+${p}.mt-ds-lcGreek .ML__cmr {
   font-family: var(--mt-ds-lcGreek-font, Symbol, serif) !important;
   font-weight: var(--mt-ds-lcGreek-weight, 400) !important;
   font-style: var(--mt-ds-lcGreek-style, italic) !important;
 }
+${p}.mt-ds-ucGreek,
+${p}.mt-ds-ucGreek .ML__mathit,
+${p}.mt-ds-ucGreek .ML__cmr,
+${p}.mt-ds-ucGreek .ML__mathbf {
+  font-family: var(--mt-ds-ucGreek-font, Symbol, serif) !important;
+  font-weight: var(--mt-ds-ucGreek-weight, 400) !important;
+  font-style: var(--mt-ds-ucGreek-style, italic) !important;
+}
 ${p}.ML__content-placeholder {
   font-family: var(--mt-ds-variable-font, var(--mt-math-font)) !important;
+}
+/* Kill MathLive focused-text / contains-highlight wash (gray boxes on Text). */
+${p}.ML__text,
+${p}.ML__focused .ML__text,
+${p}.ML__contains-highlight,
+${p}.ML__focused .ML__contains-highlight {
+  background: transparent !important;
+  background-color: transparent !important;
 }
 `.trim();
 }
