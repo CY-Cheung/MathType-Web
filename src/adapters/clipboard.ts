@@ -129,27 +129,56 @@ export function wordBaselineShiftStyle(depthPt: number): string {
   return `vertical-align:-${x}pt;mso-text-raise:-${x}pt;`;
 }
 
+/** Escape LaTeX for use in HTML attribute values (`alt`). */
+export function escapeHtmlAttr(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+export type InlinePngHtmlOptions = {
+  /**
+   * When true (default for "plain image" pref), emit span+img only — no `<a>`.
+   * When false, wrap img in `<a href="#eq=…">` for click-back round-trip.
+   */
+  plainImageNoLink?: boolean;
+};
+
 /**
- * Pure inline equation markup — shifted span+a+img only.
+ * Pure inline equation markup — shifted span (+ optional a) + img.
+ * Always keeps pt size, baseline shift, and LaTeX in `alt`.
  */
-export function buildInlinePngEquationHtml(latex: string, raster: RasterResult): string {
+export function buildInlinePngEquationHtml(
+  latex: string,
+  raster: RasterResult,
+  options: InlinePngHtmlOptions = {},
+): string {
+  const plainImageNoLink = options.plainImageNoLink !== false;
   const href = buildEqHref(latex).replace(/"/g, "&quot;");
   const widthPt = raster.widthPt > 0 ? raster.widthPt : Math.round(raster.cssWidth * 0.75 * 100) / 100;
   const heightPt = raster.heightPt > 0 ? raster.heightPt : Math.round(raster.cssHeight * 0.75 * 100) / 100;
   const widthPx = Math.max(1, Math.round(raster.cssWidth));
   const heightPx = Math.max(1, Math.round(raster.cssHeight));
   const shift = wordBaselineShiftStyle(raster.baselinePt);
+  const alt = escapeHtmlAttr(latex);
 
   const imgStyle =
     `width:${widthPt}pt;height:${heightPt}pt;${shift}` +
     `${NO_LINK_DECORATION}display:inline;`;
   const img =
     `<img border="0" src="${raster.dataUrl}" width="${widthPx}" height="${heightPx}" ` +
-    `style="${imgStyle}" alt="equation" />`;
+    `style="${imgStyle}" alt="${alt}" />`;
 
-  const anchorStyle = `${shift}${NO_LINK_DECORATION}color:windowtext;`;
   const spanStyle = `${shift}${NO_LINK_DECORATION}color:windowtext;`;
 
+  if (plainImageNoLink) {
+    // No hyperlink wrapper — Word will not paint blue underline / hover tip.
+    return `<span style="${spanStyle}">${img}</span>`;
+  }
+
+  const anchorStyle = `${shift}${NO_LINK_DECORATION}color:windowtext;`;
   return `<span style="${spanStyle}"><a href="${href}" style="${anchorStyle}">${img}</a></span>`;
 }
 
@@ -162,13 +191,18 @@ export function buildInlinePngEquationHtml(latex: string, raster: RasterResult):
  *
  * Content = equation span (depth shift) + real-space 0pt reset span, no newlines.
  */
-export function wrapPngForWord(latex: string, raster: RasterResult): string {
-  return `${buildInlinePngEquationHtml(latex, raster)}${WORD_BASELINE_RESET_SPAN}`;
+export function wrapPngForWord(
+  latex: string,
+  raster: RasterResult,
+  options: InlinePngHtmlOptions = {},
+): string {
+  return `${buildInlinePngEquationHtml(latex, raster, options)}${WORD_BASELINE_RESET_SPAN}`;
 }
 
 export async function copyPng(
   latex: string,
   scale: number = DEFAULT_EXPORT_SCALE,
+  options: InlinePngHtmlOptions = {},
 ): Promise<ClipboardExportResult> {
   if (!latex.trim()) throw new Error("Nothing to copy");
   if (!canUseClipboardItems()) {
@@ -179,17 +213,19 @@ export async function copyPng(
     if (raster.width < 2 || raster.height < 2 || raster.blob.size < 32) {
       throw new Error("PNG empty");
     }
+    const plain = options.plainImageNoLink !== false;
     // Inline-only HTML string — Chromium wraps CF_HTML; no hand-built document.
-    const html = wrapPngForWord(latex, raster);
+    const html = wrapPngForWord(latex, raster, { plainImageNoLink: plain });
     // HTML-only: a sibling image/png makes Word paste the raw 4× bitmap and
     // ignore CF_HTML pt sizing + vertical-align / mso-text-raise.
     await writeClipboardItems({
       "text/html": new Blob([html], { type: "text/html" }),
       "text/plain": new Blob([latex], { type: "text/plain" }),
     });
+    const linkNote = plain ? "plain img" : "#eq= link";
     return {
       format: "png",
-      message: `Copied: PNG (${scale}x, ${raster.width}×${raster.height}, shift -${raster.baselinePt}pt) + #eq=`,
+      message: `Copied: PNG (${scale}x, ${raster.width}×${raster.height}, shift -${raster.baselinePt}pt, ${linkNote})`,
       fallback: false,
     };
   } catch {
@@ -233,12 +269,13 @@ export async function copySvg(
 export async function copyExport(
   format: ExportFormat,
   latex: string,
+  options: InlinePngHtmlOptions = {},
 ): Promise<ClipboardExportResult> {
   switch (format) {
     case "mathml":
       return copyMathMl(latex);
     case "png":
-      return copyPng(latex);
+      return copyPng(latex, DEFAULT_EXPORT_SCALE, options);
     case "svg":
       return copySvg(latex);
     case "latex":

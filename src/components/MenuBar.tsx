@@ -21,8 +21,10 @@ export type MenuBarEditAction =
 type MenuBarProps = {
   activeStyle: ActiveStyleId;
   zoomPercent: number;
+  plainImageNoLink: boolean;
   onActiveStyleChange: (id: ActiveStyleId) => void;
   onZoomChange: (percent: number) => void;
+  onPlainImageNoLinkChange: () => void;
   onOpenDefineStyles: () => void;
   onEdit: (action: MenuBarEditAction) => void;
   onExportMathMl: () => void;
@@ -152,8 +154,10 @@ function MenuDropdown({
 export function MenuBar({
   activeStyle,
   zoomPercent,
+  plainImageNoLink,
   onActiveStyleChange,
   onZoomChange,
+  onPlainImageNoLinkChange,
   onOpenDefineStyles,
   onEdit,
   onExportMathMl,
@@ -382,6 +386,13 @@ export function MenuBar({
           id: "prefs-cut-copy",
           label: "Cut and Copy Preferences…",
           disabled: true,
+        },
+        {
+          kind: "action",
+          id: "prefs-plain-image",
+          label: "Plain Image for Word (No Hyperlink)",
+          checked: plainImageNoLink,
+          onSelect: () => run(onPlainImageNoLinkChange),
         },
         {
           kind: "action",
