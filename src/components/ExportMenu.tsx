@@ -5,6 +5,8 @@ import { FloatingPortal } from "./FloatingPortal";
 
 type ExportMenuProps = {
   busy?: boolean;
+  plainImageNoLink: boolean;
+  onPlainImageNoLinkChange: () => void;
   onExport: (format: ExportFormat) => void;
 };
 
@@ -14,12 +16,17 @@ function keepFocus(event: { preventDefault: () => void }): void {
 
 const OPTIONS: { format: ExportFormat; label: string; hint: string }[] = [
   { format: "mathml", label: "MathML", hint: "Word native equation" },
-  { format: "png", label: "PNG (4×)", hint: "Transparent · #eq= round-trip · Word" },
+  { format: "png", label: "PNG (4×)", hint: "Transparent · Word paste" },
   { format: "svg", label: "SVG", hint: "Vector · no jaggies" },
   { format: "latex", label: "LaTeX", hint: "Plain text · fallback" },
 ];
 
-export function ExportMenu({ busy = false, onExport }: ExportMenuProps) {
+export function ExportMenu({
+  busy = false,
+  plainImageNoLink,
+  onPlainImageNoLinkChange,
+  onExport,
+}: ExportMenuProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
@@ -62,13 +69,13 @@ export function ExportMenu({ busy = false, onExport }: ExportMenuProps) {
         align="end"
         zIndex={70}
         insideRefs={[rootRef]}
-        className="min-w-[220px] border border-[#999] bg-white shadow-[0_4px_12px_rgba(0,0,0,0.18)]"
+        className="min-w-[240px] border border-[#999] bg-white shadow-[0_4px_12px_rgba(0,0,0,0.18)]"
       >
         {OPTIONS.map((opt) => (
           <button
             key={opt.format}
             type="button"
-            className="flex w-full flex-col items-start gap-0.5 border-b border-[#ececec] px-2.5 py-1.5 text-left last:border-b-0 hover:bg-[#f4f7fb]"
+            className="flex w-full flex-col items-start gap-0.5 border-b border-[#ececec] px-2.5 py-1.5 text-left hover:bg-[#f4f7fb]"
             onMouseDown={keepFocus}
             onClick={() => run(opt.format)}
           >
@@ -76,6 +83,29 @@ export function ExportMenu({ busy = false, onExport }: ExportMenuProps) {
             <span className="text-[10px] text-[#666]">{opt.hint}</span>
           </button>
         ))}
+        <button
+          type="button"
+          role="menuitemcheckbox"
+          aria-checked={plainImageNoLink}
+          title="純圖貼上（無超連結藍底線）"
+          className="flex w-full items-start gap-2 px-2.5 py-1.5 text-left hover:bg-[#f4f7fb]"
+          onMouseDown={keepFocus}
+          onClick={() => {
+            onPlainImageNoLinkChange();
+          }}
+        >
+          <span className="mt-0.5 inline-block w-3 shrink-0 text-center text-[10px] text-[#222]">
+            {plainImageNoLink ? "✓" : ""}
+          </span>
+          <span className="flex min-w-0 flex-col gap-0.5">
+            <span className="text-[12px] font-medium text-[#222]">
+              Plain Image for Word (No Hyperlink)
+            </span>
+            <span className="text-[10px] text-[#666]">
+              純圖貼上（無超連結藍底線）· PNG only
+            </span>
+          </span>
+        </button>
       </FloatingPortal>
     </div>
   );

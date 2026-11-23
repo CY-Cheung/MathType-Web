@@ -20,6 +20,7 @@ import {
   workspaceZoomShortcutPercent,
 } from "./core/shortcuts";
 import { useDefineStyles } from "./hooks/useDefineStyles";
+import { useExportPrefs } from "./hooks/useExportPrefs";
 import { useWorkspaceZoom } from "./hooks/useWorkspaceZoom";
 import {
   activeStyleLabel,
@@ -50,6 +51,7 @@ export default function App() {
   const [activeStyle, setActiveStyle] = useState<ActiveStyleId>(DEFAULT_ACTIVE_STYLE);
   const { prefs: stylePrefs, commit: commitStyles } = useDefineStyles();
   const { zoomPercent, setZoomPercent } = useWorkspaceZoom();
+  const { plainImageNoLink, setPlainImageNoLink } = useExportPrefs();
 
   const showToast = useCallback((message: string) => {
     setToast(message);
@@ -105,7 +107,13 @@ export default function App() {
       const selection = editorRef.current?.captureSelection() ?? null;
       setExportBusy(true);
       try {
-        showToast((await copyExport(format, latex)).message);
+        showToast(
+          (
+            await copyExport(format, latex, {
+              plainImageNoLink,
+            })
+          ).message,
+        );
       } catch (error) {
         showToast(error instanceof Error ? error.message : "Copy failed");
       } finally {
@@ -113,8 +121,17 @@ export default function App() {
         editorRef.current?.restoreSelection(selection);
       }
     },
-    [exportBusy, showToast],
+    [exportBusy, plainImageNoLink, showToast],
   );
+
+  const togglePlainImageNoLink = useCallback(() => {
+    const next = setPlainImageNoLink(!plainImageNoLink);
+    showToast(
+      next
+        ? "Word PNG: plain image (no hyperlink)"
+        : "Word PNG: linked image (#eq=)",
+    );
+  }, [plainImageNoLink, setPlainImageNoLink, showToast]);
 
   const runEdit = useCallback(
     (action: MenuBarEditAction) => {
@@ -220,8 +237,10 @@ export default function App() {
         <MenuBar
           activeStyle={activeStyle}
           zoomPercent={zoomPercent}
+          plainImageNoLink={plainImageNoLink}
           onActiveStyleChange={changeActiveStyle}
           onZoomChange={changeZoom}
+          onPlainImageNoLinkChange={togglePlainImageNoLink}
           onOpenDefineStyles={() => setStylesOpen(true)}
           onEdit={runEdit}
           onExportMathMl={() => void runExport("mathml")}
@@ -242,7 +261,12 @@ export default function App() {
             >
               Batch
             </button>
-            <ExportMenu busy={exportBusy} onExport={(format) => void runExport(format)} />
+            <ExportMenu
+              busy={exportBusy}
+              plainImageNoLink={plainImageNoLink}
+              onPlainImageNoLinkChange={togglePlainImageNoLink}
+              onExport={(format) => void runExport(format)}
+            />
           </div>
         </div>
         <FavoritesBar
