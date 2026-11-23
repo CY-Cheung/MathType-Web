@@ -78,6 +78,11 @@ function clearSinkQuietly(sink: HTMLElement, writingGuard: { value: boolean }): 
   }
 }
 
+export type AndroidBackspaceBridgeOptions = {
+  /** After a bridge-driven delete — re-lock Active Style / math mode. */
+  onAfterDelete?: () => void;
+};
+
 /**
  * Android / touch: keep a ZWSP sentinel in MathLive's empty keyboard-sink so
  * the OS IME still fires Backspace / `deleteContentBackward` after composition
@@ -87,9 +92,13 @@ function clearSinkQuietly(sink: HTMLElement, writingGuard: { value: boolean }): 
  * keydown). When both keydown and beforeinput fire (touch laptop), keydown wins
  * once — beforeinput only restores the sentinel.
  */
-export function attachAndroidBackspaceBridge(field: MathfieldElement): () => void {
+export function attachAndroidBackspaceBridge(
+  field: MathfieldElement,
+  options: AndroidBackspaceBridgeOptions = {},
+): () => void {
   if (!shouldEnableAndroidBackspaceBridge()) return () => {};
 
+  const { onAfterDelete } = options;
   const writingGuard = { value: false };
   let composing = false;
   let keydownHandledDelete = false;
@@ -167,6 +176,7 @@ export function attachAndroidBackspaceBridge(field: MathfieldElement): () => voi
           } else {
             field.executeCommand("deleteBackward");
           }
+          onAfterDelete?.();
         }
         ensureSentinel();
       },
