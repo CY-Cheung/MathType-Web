@@ -7,11 +7,22 @@ import { ExportMenu } from "./components/ExportMenu";
 import { FavoritesBar } from "./components/FavoritesBar";
 import { MathEditor, type EditorSelection, type MathEditorHandle } from "./components/MathEditor";
 import { MatrixDialog } from "./components/MatrixDialog";
+import { StyleSwitcher } from "./components/StyleSwitcher";
 import { Toolbar } from "./components/Toolbar";
 import { matrixToLatex, type MatrixSpec } from "./core/matrixTemplate";
-import { isExportShortcut, isMatrixDialogShortcut } from "./core/shortcuts";
+import {
+  isExportShortcut,
+  isMathStyleShortcut,
+  isMatrixDialogShortcut,
+  isTextStyleShortcut,
+} from "./core/shortcuts";
 import { useDefineStyles } from "./hooks/useDefineStyles";
-import { STATUS_BAR_LABEL } from "./types/preset";
+import {
+  activeStyleLabel,
+  DEFAULT_ACTIVE_STYLE,
+  type ActiveStyleId,
+} from "./types/activeStyle";
+import { defaultStylePreset } from "./types/preset";
 
 const TOAST_MS = 2400;
 
@@ -31,6 +42,8 @@ export default function App() {
   const [batchOpen, setBatchOpen] = useState(false);
   const [stylesOpen, setStylesOpen] = useState(false);
   const [stylesEpoch, setStylesEpoch] = useState(0);
+  const [activeStyle, setActiveStyle] = useState<ActiveStyleId>(DEFAULT_ACTIVE_STYLE);
+  const [cursorStyle, setCursorStyle] = useState<ActiveStyleId>(DEFAULT_ACTIVE_STYLE);
   const { prefs: stylePrefs, commit: commitStyles } = useDefineStyles();
 
   const showToast = useCallback((message: string) => {
@@ -38,6 +51,15 @@ export default function App() {
     if (toastTimer.current) window.clearTimeout(toastTimer.current);
     toastTimer.current = window.setTimeout(() => setToast(""), TOAST_MS);
   }, []);
+
+  const changeActiveStyle = useCallback(
+    (id: ActiveStyleId) => {
+      setActiveStyle(id);
+      setCursorStyle(id);
+      showToast(`Style: ${activeStyleLabel(id)}`);
+    },
+    [showToast],
+  );
 
   const openMatrix = useCallback(() => {
     if (matrixOpenRef.current) return;
@@ -83,10 +105,27 @@ export default function App() {
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (matrixOpenRef.current) return;
+      if (matrixOpenRef.current || stylesOpen) return;
       const target = event.target;
       if (!(target instanceof Element)) return;
       if (target.closest("input, textarea, select, [role='dialog']")) return;
+
+      // Style shortcuts when focus is outside math-field (editor handles in-field).
+      if (!target.closest("math-field")) {
+        if (isTextStyleShortcut(event)) {
+          event.preventDefault();
+          event.stopPropagation();
+          changeActiveStyle("text");
+          return;
+        }
+        if (isMathStyleShortcut(event)) {
+          event.preventDefault();
+          event.stopPropagation();
+          changeActiveStyle("math");
+          return;
+        }
+      }
+
       if (isExportShortcut(event)) {
         event.preventDefault();
         void runExport("mathml");
@@ -98,7 +137,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [openMatrix, runExport]);
+  }, [changeActiveStyle, openMatrix, runExport, stylesOpen]);
 
   useEffect(
     () => () => {
@@ -128,8 +167,10 @@ export default function App() {
     };
   }, [showToast]);
 
-  const styleStatus = `Var: ${stylePrefs.styles.variable.font} · Text: ${stylePrefs.styles.text.font}`;
-  const status = toast || chordStatus || `${STATUS_BAR_LABEL} · ${styleStatus}`;
+  const preset = defaultStylePreset;
+  const sizeZoom = `Size: Full (${preset.fullPt}pt) | Zoom: ${preset.zoomPercent}%`;
+  const faceHint = `Var: ${stylePrefs.styles.variable.font} · Text: ${stylePrefs.styles.text.font}`;
+  const statusBase = toast || chordStatus || `${sizeZoom} · ${faceHint}`;
 
   return (
     <div className="flex h-dvh flex-col bg-[#d4d4d4] sm:p-4">
@@ -139,17 +180,11 @@ export default function App() {
             <Toolbar onInsert={(latex) => editorRef.current?.insert(latex)} onOpenMatrix={openMatrix} />
           </div>
           <div className="flex shrink-0 items-center gap-1 py-1.5">
-            <button
-              type="button"
-              title="Define Styles（定義樣式）"
-              className={`h-7 border border-[#9a9a9a] px-2 text-[12px] leading-none hover:bg-white ${
-                stylesOpen ? "bg-white" : "bg-[#f7f7f7]"
-              }`}
-              onMouseDown={keepFocus}
-              onClick={() => setStylesOpen(true)}
-            >
-              Style…
-            </button>
+            <StyleSwitcher
+              activeStyle={activeStyle}
+              onChange={changeActiveStyle}
+              onOpenDefineStyles={() => setStylesOpen(true)}
+            />
             <button
               type="button"
               title="Batch .docx — scan formulas (Phase 3 Step 1)"
@@ -173,6 +208,9 @@ export default function App() {
           <MathEditor
             ref={editorRef}
             stylesEpoch={stylesEpoch}
+            activeStyle={activeStyle}
+            onActiveStyleChange={changeActiveStyle}
+            onCursorStyleChange={setCursorStyle}
             onChordStatus={setChordStatus}
             onMatrixDialog={openMatrix}
           />
@@ -185,8 +223,14 @@ export default function App() {
             />
           ) : null}
         </main>
-        <footer className="relative border-t border-[#c6c6c6] bg-[#f3f3f3] px-2 py-1.5 font-sans text-[12px] leading-snug text-[#1a1a1a]">
-          {status}
+        <footer className="relative flex items-center justify-between gap-2 border-t border-[#c6c6c6] bg-[#f3f3f3] px-2 py-1.5 font-sans text-[12px] leading-snug text-[#1a1a1a]">
+          <div className="min-w-0 flex-1 truncate">{statusBase}</div>
+          <StyleSwitcher
+            compact
+            activeStyle={cursorStyle}
+            onChange={changeActiveStyle}
+            onOpenDefineStyles={() => setStylesOpen(true)}
+          />
           {toast ? (
             <span
               className="pointer-events-none absolute bottom-full right-2 mb-1 rounded-sm border border-[#8d8d8d] bg-[#fffef6] px-2 py-1 text-[11px] text-[#222] shadow-sm"

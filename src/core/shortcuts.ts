@@ -148,3 +148,23 @@ export function isExportShortcut(event: KeyboardEvent): boolean {
   if (event.repeat || event.altKey || event.metaKey || !event.ctrlKey || !event.shiftKey) return false;
   return event.code === "KeyC";
 }
+
+/** MathType: switch Active Style → Text. */
+export const TEXT_STYLE_SHORTCUT = "Ctrl+Shift+E";
+
+export function isTextStyleShortcut(event: KeyboardEvent): boolean {
+  if (event.repeat || event.altKey || event.metaKey || !event.ctrlKey || !event.shiftKey) return false;
+  return event.code === "KeyE";
+}
+
+/**
+ * MathType: switch Active Style → Math.
+ * Primary: Ctrl+Shift+= ; backup: Ctrl+Shift+M (Ctrl+M alone opens Matrix).
+ */
+export const MATH_STYLE_SHORTCUT = "Ctrl+Shift+=";
+export const MATH_STYLE_SHORTCUT_ALT = "Ctrl+Shift+M";
+
+export function isMathStyleShortcut(event: KeyboardEvent): boolean {
+  if (event.repeat || event.altKey || event.metaKey || !event.ctrlKey || !event.shiftKey) return false;
+  return event.code === "Equal" || event.code === "NumpadEqual" || event.code === "KeyM";
+}

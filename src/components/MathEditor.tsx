@@ -1,9 +1,22 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import type { MathfieldElement } from "mathlive";
 import { attachAndroidBackspaceBridge } from "../adapters/androidBackspaceBridge";
+import {
+  applyActiveStyleToField,
+  insertStyledLetter,
+} from "../core/activeStyleApply";
 import { focusAt, readSelection, type EditorSelection } from "../core/editorSelection";
-import { toMathliveTemplate } from "../core/shortcuts";
+import {
+  isMathStyleShortcut,
+  isTextStyleShortcut,
+  toMathliveTemplate,
+} from "../core/shortcuts";
 import { useMathShortcuts } from "../core/useMathShortcuts";
+import {
+  DEFAULT_ACTIVE_STYLE,
+  inferActiveStyleFromAtom,
+  type ActiveStyleId,
+} from "../types/activeStyle";
 import { buildDefineStylesMappedCss } from "../types/defineStyles";
 import {
   defaultStylePreset,
@@ -102,6 +115,11 @@ type MathEditorProps = {
   preset?: StylePreset;
   /** Bumps when Define Styles commit so shadow CSS / CSS vars refresh. */
   stylesEpoch?: number;
+  /** Active Style Switcher selection (Math / Text / Function / …). */
+  activeStyle?: ActiveStyleId;
+  onActiveStyleChange?: (id: ActiveStyleId) => void;
+  /** Inferred style at caret / selection (for status bar). */
+  onCursorStyleChange?: (id: ActiveStyleId) => void;
   onChordStatus?: (status: string) => void;
   onMatrixDialog?: () => void;
 };
@@ -116,19 +134,37 @@ export type MathEditorHandle = {
   captureMathMl: () => string;
   captureSelection: () => EditorSelection;
   restoreSelection: (selection: EditorSelection | null) => void;
+  applyActiveStyle: (id: ActiveStyleId) => void;
 };
+
+function readCursorStyle(
+  field: MathfieldElement,
+  fallback: ActiveStyleId,
+): ActiveStyleId {
+  try {
+    const info = field.getElementInfo(field.position);
+    return inferActiveStyleFromAtom(info?.mode ?? field.mode, info?.style, fallback);
+  } catch {
+    return inferActiveStyleFromAtom(field.mode, undefined, fallback);
+  }
+}
 
 export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
   function MathEditor(
     {
       preset = defaultStylePreset,
       stylesEpoch = 0,
+      activeStyle = DEFAULT_ACTIVE_STYLE,
+      onActiveStyleChange,
+      onCursorStyleChange,
       onChordStatus,
       onMatrixDialog,
     },
     ref,
   ) {
   const fieldRef = useRef<MathfieldElement>(null);
+  const activeStyleRef = useRef(activeStyle);
+  activeStyleRef.current = activeStyle;
   const { chordStatus } = useMathShortcuts(fieldRef, onMatrixDialog);
   const viewSize = `calc(${preset.fullPt}pt * ${preset.zoomPercent} / 100)`;
 
@@ -216,6 +252,62 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
     };
   }, [stylesEpoch]);
 
+  // Apply Active Style when the switcher / shortcuts change it.
+  useEffect(() => {
+    const field = fieldRef.current;
+    if (!field) return;
+    applyActiveStyleToField(field, activeStyle);
+  }, [activeStyle]);
+
+  // Report caret style for status bar; handle Style shortcuts + Function letters.
+  useEffect(() => {
+    const field = fieldRef.current;
+    if (!field) return;
+
+    const reportCursor = () => {
+      onCursorStyleChange?.(readCursorStyle(field, activeStyleRef.current));
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (isTextStyleShortcut(event)) {
+        event.preventDefault();
+        event.stopPropagation();
+        onActiveStyleChange?.("text");
+        return;
+      }
+      if (isMathStyleShortcut(event)) {
+        event.preventDefault();
+        event.stopPropagation();
+        onActiveStyleChange?.("math");
+        return;
+      }
+
+      const style = activeStyleRef.current;
+      if (
+        (style === "function" || style === "user1" || style === "user2") &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        !event.metaKey &&
+        event.key.length === 1 &&
+        /^[a-zA-Z]$/.test(event.key)
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+        insertStyledLetter(field, style, event.key);
+      }
+    };
+
+    field.addEventListener("selection-change", reportCursor);
+    field.addEventListener("mode-change", reportCursor);
+    field.addEventListener("keydown", onKeyDown, true);
+    reportCursor();
+    return () => {
+      field.removeEventListener("selection-change", reportCursor);
+      field.removeEventListener("mode-change", reportCursor);
+      field.removeEventListener("keydown", onKeyDown, true);
+    };
+  }, [onActiveStyleChange, onCursorStyleChange]);
+
   useEffect(() => {
     onChordStatus?.(chordStatus);
   }, [chordStatus, onChordStatus]);
@@ -253,6 +345,11 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
     restoreSelection(selection: EditorSelection | null) {
       const field = fieldRef.current;
       if (field) focusAt(field, selection);
+    },
+    applyActiveStyle(id: ActiveStyleId) {
+      const field = fieldRef.current;
+      if (!field) return;
+      applyActiveStyleToField(field, id);
     },
   }));
 
