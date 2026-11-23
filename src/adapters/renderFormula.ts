@@ -11,12 +11,22 @@ import {
   readDefineStylesPrefs,
 } from "../types/defineStyles";
 import { defaultStylePreset } from "../types/preset";
+import {
+  bytesToPngDataUrl,
+  dataUrlToBytes,
+  EXPORT_PNG_DPI,
+  EXPORT_PNG_PIXELS_PER_METER,
+  readPngPhysPpm,
+  setPngPhysDpi,
+} from "./pngPhys";
 
 /** Physical 10pt export size (editor zoom is view-only). */
 const EXPORT_FONT_PT = defaultStylePreset.fullPt;
 
-/** SPEC Phase 2: 4× High-DPI PNG locked to physical 10pt. */
+/** SPEC Phase 2: 4× High-DPI PNG locked to physical 10pt (= 384 DPI vs 96). */
 export const DEFAULT_EXPORT_SCALE = 4;
+
+export { EXPORT_PNG_DPI, EXPORT_PNG_PIXELS_PER_METER };
 
 /** CSS px → pt at 96 DPI (SPEC: depthPx * 0.75 → vertical-align pt). */
 export const PX_TO_PT = 0.75;
@@ -195,8 +205,15 @@ export type RasterResult = {
   depthPx: number;
   /** `vertical-align: -Xpt` magnitude (depth below baseline, clamped). */
   baselinePt: number;
+  /** PNG pHYs pixels/meter (x), after 384 DPI stamp; null if missing. */
+  physPpm: number | null;
 };
 
+/**
+ * Rasterize MathLive markup at true `scale`× (default 4) via html-to-image
+ * `pixelRatio`, then stamp PNG `pHYs` at 384 DPI so Word does not treat the
+ * bitmap as a 96 DPI screen grab and soft-downsample it.
+ */
 export async function renderFormulaPng(
   latex: string,
   scale: number = DEFAULT_EXPORT_SCALE,
@@ -210,13 +227,27 @@ export async function renderFormulaPng(
     const cssHeight = Math.max(1, rect.height);
     const widthPt = pxToPt(cssWidth);
     const heightPt = pxToPt(cssHeight);
-    const dataUrl = await toPng(node, {
+    // html-to-image sets canvas.width = (canvasWidth || width) * pixelRatio.
+    // Pass CSS layout size + pixelRatio only — do NOT also pass canvasWidth×scale
+    // or the bitmap becomes scale² (e.g. 16×). True 4× = vector draw at 4× DPR.
+    const rawDataUrl = await toPng(node, {
       pixelRatio: scale,
+      width: cssWidth,
+      height: cssHeight,
       backgroundColor: "transparent",
       cacheBust: true,
-      style: { background: "transparent" },
+      style: {
+        background: "transparent",
+        transform: "none",
+        width: `${cssWidth}px`,
+        height: `${cssHeight}px`,
+      },
     });
-    const blob = await (await fetch(dataUrl)).blob();
+    const stamped = setPngPhysDpi(dataUrlToBytes(rawDataUrl), EXPORT_PNG_DPI);
+    const dataUrl = bytesToPngDataUrl(stamped);
+    const blob = new Blob([stamped.buffer.slice(stamped.byteOffset, stamped.byteOffset + stamped.byteLength) as ArrayBuffer], {
+      type: "image/png",
+    });
     const img = await loadImage(dataUrl);
     return {
       blob,
@@ -230,6 +261,7 @@ export async function renderFormulaPng(
       scale,
       depthPx,
       baselinePt: depthToValignPt(depthPx, heightPt),
+      physPpm: readPngPhysPpm(stamped),
     };
   } finally {
     unmountExportNode(node);
