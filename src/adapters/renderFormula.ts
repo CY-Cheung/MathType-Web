@@ -1,12 +1,14 @@
 import { convertLatexToMarkup } from "mathlive";
 import { toPng, toSvg } from "html-to-image";
 import "mathlive/static.css";
+import "../styles/tex-gyre-termes.css";
 import "./export-formula.css";
+import { MT_FONT_LOAD_SPECS, MT_FONT_STACK } from "../styles/fontStack";
 import { defaultStylePreset } from "../types/preset";
 
 /** Physical 10pt export size (editor zoom is view-only). */
 const EXPORT_FONT_PT = defaultStylePreset.fullPt;
-const FONT_FAMILY = '"Times New Roman", "Liberation Serif", Times, serif';
+const FONT_FAMILY = MT_FONT_STACK;
 
 /** SPEC Phase 2: 4× High-DPI PNG locked to physical 10pt. */
 export const DEFAULT_EXPORT_SCALE = 4;
@@ -14,9 +16,23 @@ export const DEFAULT_EXPORT_SCALE = 4;
 /** CSS px → pt (SPEC: depthPx * 0.75 → vertical-align pt). */
 export const PX_TO_PT = 0.75;
 
-function waitForFonts(): Promise<void> {
-  if (typeof document === "undefined" || !document.fonts?.ready) return Promise.resolve();
-  return document.fonts.ready.then(() => undefined);
+/** Warm both the named Termes face and the TNR local()+url intercept. */
+const EXPORT_FONT_LOAD_SPECS = [
+  ...MT_FONT_LOAD_SPECS,
+  '10pt "Times New Roman"',
+  'italic 10pt "Times New Roman"',
+  'bold 10pt "Times New Roman"',
+  'italic bold 10pt "Times New Roman"',
+] as const;
+
+async function waitForFonts(): Promise<void> {
+  if (typeof document === "undefined" || !document.fonts) return;
+  await document.fonts.ready;
+  await Promise.all(
+    EXPORT_FONT_LOAD_SPECS.map((spec) =>
+      document.fonts.load(spec).catch(() => [] as FontFace[]),
+    ),
+  );
 }
 
 /** Off-screen MathLive markup at 10pt Times, ready for raster / SVG capture. */

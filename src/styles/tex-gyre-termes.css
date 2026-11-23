@@ -1,0 +1,88 @@
+/*
+ * Self-hosted TeX Gyre Termes (GUST) — Times-compatible face.
+ * Also register under "Times New Roman" with local() first so Windows
+ * keeps real TNR, while Linux/CI (where fontconfig aliases TNR → Tinos /
+ * Liberation) actually paint the self-hosted Termes file instead of the
+ * alias. Stretchy MathLive glyphs stay on KaTeX.
+ */
+
+/* Named fallback family used in the CSS stack after Times New Roman. */
+@font-face {
+  font-family: "TeX Gyre Termes";
+  src: url("/fonts/texgyretermes-regular.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "TeX Gyre Termes";
+  src: url("/fonts/texgyretermes-italic.otf") format("opentype");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "TeX Gyre Termes";
+  src: url("/fonts/texgyretermes-bold.otf") format("opentype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "TeX Gyre Termes";
+  src: url("/fonts/texgyretermes-bolditalic.otf") format("opentype");
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+/*
+ * Intercept the first stack name so fontconfig aliases cannot steal the
+ * match before "TeX Gyre Termes" is considered.
+ */
+@font-face {
+  font-family: "Times New Roman";
+  src:
+    local("Times New Roman"),
+    local("TimesNewRomanPSMT"),
+    url("/fonts/texgyretermes-regular.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Times New Roman";
+  src:
+    local("Times New Roman Italic"),
+    local("TimesNewRomanPS-ItalicMT"),
+    url("/fonts/texgyretermes-italic.otf") format("opentype");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Times New Roman";
+  src:
+    local("Times New Roman Bold"),
+    local("TimesNewRomanPS-BoldMT"),
+    url("/fonts/texgyretermes-bold.otf") format("opentype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Times New Roman";
+  src:
+    local("Times New Roman Bold Italic"),
+    local("TimesNewRomanPS-BoldItalicMT"),
+    url("/fonts/texgyretermes-bolditalic.otf") format("opentype");
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}

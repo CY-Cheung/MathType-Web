@@ -4,7 +4,7 @@
 .mt-export-formula .ML__mathbf,
 .mt-export-formula .ML__cmr,
 .mt-export-formula .ML__text {
-  font-family: "Times New Roman", "Liberation Serif", Times, serif !important;
+  font-family: "Times New Roman", "TeX Gyre Termes", "Liberation Serif", Times, serif !important;
 }
 
 .mt-export-formula .ML__mathit,
