@@ -13,6 +13,8 @@ import {
 
 type MathfieldInternals = {
   defaultStyle?: Style;
+  /** When `"none"`, insert style ignores neighboring atoms. */
+  styleBias?: "left" | "right" | "none";
 };
 
 function internalField(field: MathfieldElement): MathfieldInternals | null {
@@ -20,10 +22,25 @@ function internalField(field: MathfieldElement): MathfieldInternals | null {
   return host.mathfield ?? null;
 }
 
+/**
+ * Insertion style MathLive should use for the next typed characters.
+ * Math → `{}` so TeX letter-shape (italic variables) applies; other Active
+ * Styles return their MathLive Style. Neighbor-atom inheritance is disabled
+ * separately via `styleBias = "none"`.
+ */
+export function insertStyleForActiveStyle(id: ActiveStyleId): Style {
+  if (id === "math") return {};
+  return mathLiveStyleFor(id);
+}
+
 /** Reset MathLive insertion style so a full Active Style replace sticks. */
 export function clearInsertionStyle(field: MathfieldElement): void {
   const mf = internalField(field);
-  if (mf) mf.defaultStyle = {};
+  if (!mf) return;
+  mf.defaultStyle = {};
+  // Stop inheriting upright digit / Function style from the previous atom
+  // (that inheritance is what made retype-after-clear look roman).
+  mf.styleBias = "none";
 }
 
 /**
@@ -78,9 +95,22 @@ export function applyActiveStyleToField(
     field.executeCommand(["switchMode", mode]);
   }
   // Math style: leave defaultStyle empty so TeX letter-shape rules apply.
+  // Non-math styles stamp defaultStyle (also sets styleBias to "none").
   if (id !== "math") {
     field.applyStyle(style, { operation: "set" });
   }
+}
+
+/**
+ * Hook for MathLive `onInsertStyle`: Active Style owns new typing, not the
+ * style of the atom left of the caret (digits are upright in TeX and would
+ * otherwise pull the next letter into roman / Function).
+ */
+export function bindInsertStyleHook(
+  field: MathfieldElement,
+  getActiveStyle: () => ActiveStyleId,
+): void {
+  field.onInsertStyle = () => insertStyleForActiveStyle(getActiveStyle());
 }
 
 /**
