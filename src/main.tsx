@@ -5,11 +5,11 @@ import App from "./App.tsx";
 import "./index.css";
 import { ensureTexGyreTermesFonts } from "./styles/tex-gyre-termes";
 import "./styles/mathtype-10pt.css";
-import { readFontStylePrefs, syncFontStyleToRoot } from "./types/fontStyle";
+import { readDefineStylesPrefs, syncDefineStylesToRoot } from "./types/defineStyles";
 
 ensureTexGyreTermesFonts();
-// Apply persisted Math / Text faces to :root before first paint.
-syncFontStyleToRoot(readFontStylePrefs());
+// Apply persisted Define Styles to :root before first paint.
+syncDefineStylesToRoot(readDefineStylesPrefs());
 MathfieldElement.fontsDirectory = `${import.meta.env.BASE_URL}vendor/mathlive/fonts`;
 MathfieldElement.soundsDirectory = null;
 

@@ -1,42 +1,46 @@
 /*
- * Off-screen export host (10pt). Faces come from inline --mt-math-font /
- * --mt-text-font stamped by mountExportNode (mirrors :root). Do not redefine
- * those vars here — a self-referential var() would drop the face.
+ * Off-screen export host (10pt). Faces come from inline --mt-ds-* vars
+ * stamped by mountExportNode (mirrors :root Define Styles).
  */
 
-.mt-export-formula .ML__base,
-.mt-export-formula .ML__mathit,
+.mt-export-formula .ML__text,
+.mt-export-formula .ML__text .ML__mathit,
+.mt-export-formula .ML__text .ML__mathbf,
+.mt-export-formula .ML__text .ML__cmr {
+  font-family: var(--mt-ds-text-font), var(--mt-ds-textFe-font), sans-serif !important;
+  font-weight: var(--mt-ds-text-weight, 400) !important;
+  font-style: var(--mt-ds-text-style, normal) !important;
+}
+
+.mt-export-formula .ML__mathit {
+  font-family: var(--mt-ds-variable-font, var(--mt-math-font)) !important;
+  font-weight: var(--mt-ds-variable-weight, 400) !important;
+  font-style: var(--mt-ds-variable-style, italic) !important;
+}
+
 .mt-export-formula .ML__mathbf,
-.mt-export-formula .ML__mathbfit,
-.mt-export-formula .ML__cmr {
-  font-family: var(
-    --mt-math-font,
-    var(
-      --mt-math-font-family,
-      "Times New Roman",
-      "TeX Gyre Termes",
-      "Liberation Serif",
-      Times,
-      serif
-    )
-  ) !important;
-}
-
-.mt-export-formula .ML__text {
-  font-family: var(
-    --mt-text-font,
-    var(
-      --mt-text-font-family,
-      "Times New Roman",
-      "TeX Gyre Termes",
-      "Liberation Serif",
-      Times,
-      serif
-    )
-  ) !important;
-}
-
-.mt-export-formula .ML__mathit,
 .mt-export-formula .ML__mathbfit {
-  font-style: italic;
+  font-family: var(--mt-ds-vectorMatrix-font, var(--mt-math-font)) !important;
+  font-weight: var(--mt-ds-vectorMatrix-weight, 700) !important;
+  font-style: var(--mt-ds-vectorMatrix-style, normal) !important;
+}
+
+.mt-export-formula .ML__op-group .ML__cmr {
+  font-family: var(--mt-ds-function-font, var(--mt-math-font)) !important;
+  font-weight: var(--mt-ds-function-weight, 400) !important;
+  font-style: var(--mt-ds-function-style, normal) !important;
+}
+
+.mt-export-formula .ML__cmr {
+  font-family: var(--mt-ds-number-font, var(--mt-math-font)) !important;
+  font-weight: var(--mt-ds-number-weight, 400) !important;
+  font-style: var(--mt-ds-number-style, normal) !important;
+}
+
+.mt-export-formula .lcGreek,
+.mt-export-formula .lcGreek.ML__mathit,
+.mt-export-formula .lcGreek.ML__mathbf {
+  font-family: var(--mt-ds-lcGreek-font, Symbol, serif) !important;
+  font-weight: var(--mt-ds-lcGreek-weight, 400) !important;
+  font-style: var(--mt-ds-lcGreek-style, italic) !important;
 }

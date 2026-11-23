@@ -5,11 +5,11 @@ import { ensureTexGyreTermesFonts } from "../styles/tex-gyre-termes";
 import "./export-formula.css";
 import { MT_FONT_LOAD_SPECS, MT_FONT_STACK } from "../styles/fontStack";
 import {
-  fontLoadSpecsFor,
-  fontStyleInlineVars,
-  mathFontStackFrom,
-  readFontStylePrefs,
-} from "../types/fontStyle";
+  defineStylesInlineVars,
+  fontLoadSpecsForDefineStyles,
+  fontStackFor,
+  readDefineStylesPrefs,
+} from "../types/defineStyles";
 import { defaultStylePreset } from "../types/preset";
 
 /** Physical 10pt export size (editor zoom is view-only). */
@@ -39,16 +39,19 @@ async function waitForFonts(): Promise<void> {
   if (typeof document === "undefined" || !document.fonts) return;
   ensureTexGyreTermesFonts();
   await document.fonts.ready;
-  const prefs = readFontStylePrefs();
-  const specs = [...BASE_EXPORT_FONT_LOAD_SPECS, ...fontLoadSpecsFor(prefs, EXPORT_FONT_PT)];
+  const prefs = readDefineStylesPrefs();
+  const specs = [
+    ...BASE_EXPORT_FONT_LOAD_SPECS,
+    ...fontLoadSpecsForDefineStyles(prefs, EXPORT_FONT_PT),
+  ];
   await Promise.all(specs.map((spec) => document.fonts.load(spec).catch(() => [] as FontFace[])));
 }
 
 /** Off-screen MathLive markup at 10pt, ready for raster / SVG capture. */
 export async function mountExportNode(latex: string): Promise<HTMLElement> {
   await waitForFonts();
-  const prefs = readFontStylePrefs();
-  const mathFamily = mathFontStackFrom(prefs) || MT_FONT_STACK;
+  const prefs = readDefineStylesPrefs();
+  const mathFamily = fontStackFor(prefs.styles.variable.font) || MT_FONT_STACK;
   const host = document.createElement("div");
   host.setAttribute("data-mt-export-host", "1");
   // Inline line box so formula + baseline strut share one baseline (Word depth).
@@ -57,8 +60,7 @@ export async function mountExportNode(latex: string): Promise<HTMLElement> {
   const node = document.createElement("span");
   node.className = "mt-export-formula";
   // No padding — padding inflated Word display size and skewed depth.
-  // Inline --mt-math-font / --mt-text-font so html-to-image keeps faces even
-  // when the off-screen host does not inherit live :root updates reliably.
+  // Inline Define Styles CSS vars so html-to-image keeps faces / bold / italic.
   node.style.cssText = [
     "display:inline-block",
     "padding:0",
@@ -67,7 +69,7 @@ export async function mountExportNode(latex: string): Promise<HTMLElement> {
     "background:transparent",
     "color:#000",
     `font-family:${mathFamily}`,
-    fontStyleInlineVars(prefs),
+    defineStylesInlineVars(prefs),
     `font-size:${EXPORT_FONT_PT}pt`,
     "line-height:normal",
     "vertical-align:baseline",
