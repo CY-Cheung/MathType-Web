@@ -20,7 +20,11 @@ import {
   setPngPhysDpi,
 } from "./pngPhys";
 
-/** Physical 10pt export size (editor zoom is view-only). */
+/**
+ * Physical Full size for PNG / Word export.
+ * Workspace Zoom (status-bar %) is view-only and must never feed this path —
+ * clipboard baseline / pt sizing stay locked to 10pt regardless of 100–800% UI zoom.
+ */
 const EXPORT_FONT_PT = defaultStylePreset.fullPt;
 
 /** SPEC Phase 2: 4× High-DPI PNG locked to physical 10pt (= 384 DPI vs 96). */
