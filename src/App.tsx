@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { copyExport, type ExportFormat } from "./adapters/clipboard";
+import { DocxBatchPanel } from "./components/DocxBatchPanel";
 import { MathEditor, type EditorSelection, type MathEditorHandle } from "./components/MathEditor";
 import { ExportMenu } from "./components/ExportMenu";
 import { FavoritesBar } from "./components/FavoritesBar";
@@ -11,6 +12,10 @@ import { STATUS_BAR_LABEL } from "./types/preset";
 
 const TOAST_MS = 2400;
 
+function keepFocus(event: { preventDefault: () => void }): void {
+  event.preventDefault();
+}
+
 export default function App() {
   const editorRef = useRef<MathEditorHandle>(null);
   const selectionRef = useRef<EditorSelection | null>(null);
@@ -20,6 +25,7 @@ export default function App() {
   const [toast, setToast] = useState("");
   const [exportBusy, setExportBusy] = useState(false);
   const [matrixOpen, setMatrixOpen] = useState(false);
+  const [batchOpen, setBatchOpen] = useState(false);
 
   const showToast = useCallback((message: string) => {
     setToast(message);
@@ -58,8 +64,7 @@ export default function App() {
       const selection = editorRef.current?.captureSelection() ?? null;
       setExportBusy(true);
       try {
-        const result = await copyExport(format, latex);
-        showToast(result.message);
+        showToast((await copyExport(format, latex)).message);
       } catch (error) {
         showToast(error instanceof Error ? error.message : "Copy failed");
       } finally {
@@ -76,15 +81,12 @@ export default function App() {
       const target = event.target;
       if (!(target instanceof Element)) return;
       if (target.closest("input, textarea, select, [role='dialog']")) return;
-
       if (isExportShortcut(event)) {
         event.preventDefault();
         void runExport("mathml");
         return;
       }
-
-      if (!isMatrixDialogShortcut(event)) return;
-      if (target.closest("math-field")) return;
+      if (!isMatrixDialogShortcut(event) || target.closest("math-field")) return;
       event.preventDefault();
       openMatrix();
     };
@@ -103,12 +105,23 @@ export default function App() {
 
   return (
     <div className="flex h-dvh flex-col bg-[#d4d4d4] sm:p-4">
-      <div className="flex min-h-0 flex-1 flex-col border border-[#b4b4b4] bg-white shadow-sm">
+      <div className="relative flex min-h-0 flex-1 flex-col border border-[#b4b4b4] bg-white shadow-sm">
         <div className="flex items-start justify-between gap-2 border-b border-[#b5b5b5] bg-[#e6e6e6] pr-1">
           <div className="min-w-0 flex-1">
             <Toolbar onInsert={(latex) => editorRef.current?.insert(latex)} onOpenMatrix={openMatrix} />
           </div>
           <div className="flex shrink-0 items-center gap-1 py-1.5">
+            <button
+              type="button"
+              title="Batch .docx — scan formulas (Phase 3 Step 1)"
+              className={`h-7 border border-[#9a9a9a] px-2 text-[12px] leading-none hover:bg-white ${
+                batchOpen ? "bg-white" : "bg-[#f7f7f7]"
+              }`}
+              onMouseDown={keepFocus}
+              onClick={() => setBatchOpen((open) => !open)}
+            >
+              Batch .docx
+            </button>
             <span className="hidden text-[10px] text-[#666] sm:inline">Ctrl+Shift+C</span>
             <ExportMenu busy={exportBusy} onExport={(format) => void runExport(format)} />
           </div>
@@ -119,6 +132,13 @@ export default function App() {
         />
         <main className="relative min-h-0 flex-1">
           <MathEditor ref={editorRef} onChordStatus={setChordStatus} onMatrixDialog={openMatrix} />
+          {batchOpen ? (
+            <DocxBatchPanel
+              onClose={() => setBatchOpen(false)}
+              onLoadFormula={(latex) => editorRef.current?.load(latex)}
+              onStatus={showToast}
+            />
+          ) : null}
         </main>
         <footer className="relative border-t border-[#c6c6c6] bg-[#f3f3f3] px-2 py-1.5 font-sans text-[12px] leading-snug text-[#1a1a1a]">
           {status}
