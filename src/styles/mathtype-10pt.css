@@ -5,9 +5,16 @@
  */
 
 :root {
-  /* Canonical faces — JS syncFontStyleToRoot() overwrites these live. */
-  --mt-math-font: "Times New Roman", "TeX Gyre Termes", "Liberation Serif", Times, serif;
-  --mt-text-font: "Times New Roman", "TeX Gyre Termes", "Liberation Serif", Times, serif;
+  /* Define Styles — JS syncDefineStylesToRoot() overwrites these live. */
+  --mt-ds-variable-font: "Times New Roman", "TeX Gyre Termes", "Liberation Serif", Times, serif;
+  --mt-ds-variable-weight: 400;
+  --mt-ds-variable-style: italic;
+  --mt-ds-text-font: "Times New Roman", "TeX Gyre Termes", "Liberation Serif", Times, serif;
+  --mt-ds-text-weight: 400;
+  --mt-ds-text-style: normal;
+  --mt-ds-textFe-font: "PMingLiU", "新細明體", MingLiU, serif;
+  --mt-math-font: var(--mt-ds-variable-font);
+  --mt-text-font: var(--mt-ds-text-font), var(--mt-ds-textFe-font);
   --mt-math-font-family: var(--mt-math-font);
   --mt-text-font-family: var(--mt-text-font);
   --mt-font-family: var(--mt-math-font);

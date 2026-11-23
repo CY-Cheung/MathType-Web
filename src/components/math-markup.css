@@ -1,39 +1,47 @@
+/* Toolbar / Favorites previews — follow :root Define Styles vars. */
 .mt-markup {
   font-size: 16px;
   color: #111;
 }
 
-.mt-markup .ML__base,
-.mt-markup .ML__mathit,
-.mt-markup .ML__mathbf,
-.mt-markup .ML__cmr {
-  font-family: var(
-    --mt-math-font,
-    var(
-      --mt-math-font-family,
-      "Times New Roman",
-      "TeX Gyre Termes",
-      "Liberation Serif",
-      Times,
-      serif
-    )
-  ) !important;
-}
-
-.mt-markup .ML__text {
-  font-family: var(
-    --mt-text-font,
-    var(
-      --mt-text-font-family,
-      "Times New Roman",
-      "TeX Gyre Termes",
-      "Liberation Serif",
-      Times,
-      serif
-    )
-  ) !important;
+.mt-markup .ML__text,
+.mt-markup .ML__text .ML__mathit,
+.mt-markup .ML__text .ML__mathbf,
+.mt-markup .ML__text .ML__cmr {
+  font-family: var(--mt-ds-text-font), var(--mt-ds-textFe-font), sans-serif !important;
+  font-weight: var(--mt-ds-text-weight, 400) !important;
+  font-style: var(--mt-ds-text-style, normal) !important;
 }
 
 .mt-markup .ML__mathit {
-  font-style: italic;
+  font-family: var(--mt-ds-variable-font, var(--mt-math-font)) !important;
+  font-weight: var(--mt-ds-variable-weight, 400) !important;
+  font-style: var(--mt-ds-variable-style, italic) !important;
+}
+
+.mt-markup .ML__mathbf,
+.mt-markup .ML__mathbfit {
+  font-family: var(--mt-ds-vectorMatrix-font, var(--mt-math-font)) !important;
+  font-weight: var(--mt-ds-vectorMatrix-weight, 700) !important;
+  font-style: var(--mt-ds-vectorMatrix-style, normal) !important;
+}
+
+.mt-markup .ML__op-group .ML__cmr {
+  font-family: var(--mt-ds-function-font, var(--mt-math-font)) !important;
+  font-weight: var(--mt-ds-function-weight, 400) !important;
+  font-style: var(--mt-ds-function-style, normal) !important;
+}
+
+.mt-markup .ML__base > .ML__cmr,
+.mt-markup .ML__cmr {
+  font-family: var(--mt-ds-number-font, var(--mt-math-font)) !important;
+  font-weight: var(--mt-ds-number-weight, 400) !important;
+  font-style: var(--mt-ds-number-style, normal) !important;
+}
+
+.mt-markup .lcGreek,
+.mt-markup .lcGreek.ML__mathit {
+  font-family: var(--mt-ds-lcGreek-font, Symbol, serif) !important;
+  font-weight: var(--mt-ds-lcGreek-weight, 400) !important;
+  font-style: var(--mt-ds-lcGreek-style, italic) !important;
 }

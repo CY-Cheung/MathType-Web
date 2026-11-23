@@ -3,6 +3,7 @@ import type { MathfieldElement } from "mathlive";
 import { focusAt, readSelection, type EditorSelection } from "../core/editorSelection";
 import { toMathliveTemplate } from "../core/shortcuts";
 import { useMathShortcuts } from "../core/useMathShortcuts";
+import { buildDefineStylesMappedCss } from "../types/defineStyles";
 import {
   defaultStylePreset,
   type StylePreset,
@@ -12,22 +13,16 @@ import { MT_FONT_STACK } from "../styles/fontStack";
 const SHADOW_STYLE_ID = "mt-10pt-shadow";
 
 /**
- * Shadow CSS: Math / Text letter faces via CSS vars.
- * Stretchy KaTeX / MathLive symbol fonts are intentionally untouched.
+ * Shadow CSS: Define Styles → MathLive classes.
+ * Stretchy KaTeX / MathLive operator fonts are left alone (Symbol/Extra Math
+ * letter faces still map where MathLive uses text spans).
  */
 export const MATHFIELD_SHADOW_CSS = `
 :host {
-  --_text-font-family: var(--mt-text-font, var(--mt-text-font-family, var(--mt-math-font, ${MT_FONT_STACK})));
-  font-family: var(--mt-math-font, var(--mt-math-font-family, ${MT_FONT_STACK}));
+  --_text-font-family: var(--mt-ds-text-font, var(--mt-text-font, ${MT_FONT_STACK}));
+  font-family: var(--mt-ds-variable-font, var(--mt-math-font, ${MT_FONT_STACK}));
 }
-.ML__cmr,
-.ML__mathbf,
-.ML__content-placeholder {
-  font-family: var(--mt-math-font, var(--mt-math-font-family, ${MT_FONT_STACK})) !important;
-}
-.ML__text {
-  font-family: var(--mt-text-font, var(--mt-text-font-family, var(--mt-math-font, ${MT_FONT_STACK}))) !important;
-}
+${buildDefineStylesMappedCss("")}
 /* MathLive 0.111 draws \\placeholder{} as U+25A2 on span.ML__cmr. */
 .mt-empty-slot {
   display: inline-block;
@@ -41,12 +36,6 @@ export const MATHFIELD_SHADOW_CSS = `
   color: transparent;
   -webkit-text-fill-color: transparent;
   border: 1px dashed #008000;
-}
-.ML__mathit,
-.ML__mathbfit,
-.lcGreek.ML__mathbf {
-  font-family: var(--mt-math-font, var(--mt-math-font-family, ${MT_FONT_STACK})) !important;
-  font-style: italic;
 }
 .ML__virtual-keyboard-toggle,
 .ML__menu-toggle {
@@ -65,19 +54,20 @@ function markEmptySlots(root: ShadowRoot): void {
 
 function applyShadowStyle(field: MathfieldElement): void {
   const root = field.shadowRoot;
-  if (!root || root.getElementById(SHADOW_STYLE_ID)) return;
-  const style = document.createElement("style");
-  style.id = SHADOW_STYLE_ID;
+  if (!root) return;
+  let style = root.getElementById(SHADOW_STYLE_ID) as HTMLStyleElement | null;
+  if (!style) {
+    style = document.createElement("style");
+    style.id = SHADOW_STYLE_ID;
+    root.appendChild(style);
+  }
   style.textContent = MATHFIELD_SHADOW_CSS;
-  root.appendChild(style);
 }
 
 type MathEditorProps = {
   preset?: StylePreset;
-  /** CSS font-family stack for math letters (variables, digits). */
-  mathFontStack?: string;
-  /** CSS font-family stack for `\\text{}` / text mode. */
-  textFontStack?: string;
+  /** Bumps when Define Styles commit so shadow CSS / CSS vars refresh. */
+  stylesEpoch?: number;
   onChordStatus?: (status: string) => void;
   onMatrixDialog?: () => void;
 };
@@ -98,8 +88,7 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
   function MathEditor(
     {
       preset = defaultStylePreset,
-      mathFontStack,
-      textFontStack,
+      stylesEpoch = 0,
       onChordStatus,
       onMatrixDialog,
     },
@@ -107,8 +96,6 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
   ) {
   const fieldRef = useRef<MathfieldElement>(null);
   const { chordStatus } = useMathShortcuts(fieldRef, onMatrixDialog);
-  const mathFamily = mathFontStack ?? MT_FONT_STACK;
-  const textFamily = textFontStack ?? mathFamily;
   const viewSize = `calc(${preset.fullPt}pt * ${preset.zoomPercent} / 100)`;
 
   useEffect(() => {
@@ -142,7 +129,7 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
       cancelled = true;
       observer?.disconnect();
     };
-  }, []);
+  }, [stylesEpoch]);
 
   useEffect(() => {
     onChordStatus?.(chordStatus);
@@ -191,13 +178,8 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
       aria-label="Math editor"
       math-virtual-keyboard-policy="manual"
       style={{
-        fontFamily: mathFamily,
+        fontFamily: `var(--mt-ds-variable-font, ${MT_FONT_STACK})`,
         fontSize: viewSize,
-        ["--mt-math-font" as string]: mathFamily,
-        ["--mt-text-font" as string]: textFamily,
-        ["--mt-math-font-family" as string]: mathFamily,
-        ["--mt-text-font-family" as string]: textFamily,
-        ["--mt-font-family" as string]: mathFamily,
         ["--mt-full-size" as string]: `${preset.fullPt}pt`,
         ["--mt-script-size" as string]: `${preset.subSupPt}pt`,
         ["--mt-scriptscript-size" as string]: `${preset.subSubSupPt}pt`,
@@ -209,7 +191,7 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
         ["--selection-background-color" as string]: "#80ffff",
         ["--mt-zoom" as string]: String(preset.zoomPercent / 100),
         ["--mt-view-size" as string]: viewSize,
-        ["--text-font-family" as string]: textFamily,
+        ["--text-font-family" as string]: "var(--mt-ds-text-font, var(--mt-text-font))",
       }}
     />
   );

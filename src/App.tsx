@@ -1,17 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { copyExport, type ExportFormat } from "./adapters/clipboard";
 import { parseEqHash } from "./adapters/eqHash";
+import { DefineStylesDialog } from "./components/DefineStylesDialog";
 import { DocxBatchPanel } from "./components/DocxBatchPanel";
 import { ExportMenu } from "./components/ExportMenu";
 import { FavoritesBar } from "./components/FavoritesBar";
-import { FontStyleDialog } from "./components/FontStyleDialog";
 import { MathEditor, type EditorSelection, type MathEditorHandle } from "./components/MathEditor";
 import { MatrixDialog } from "./components/MatrixDialog";
 import { Toolbar } from "./components/Toolbar";
 import { matrixToLatex, type MatrixSpec } from "./core/matrixTemplate";
 import { isExportShortcut, isMatrixDialogShortcut } from "./core/shortcuts";
-import { useFontStyle } from "./hooks/useFontStyle";
-import { fontFaceLabel } from "./types/fontStyle";
+import { useDefineStyles } from "./hooks/useDefineStyles";
 import { STATUS_BAR_LABEL } from "./types/preset";
 
 const TOAST_MS = 2400;
@@ -30,15 +29,9 @@ export default function App() {
   const [exportBusy, setExportBusy] = useState(false);
   const [matrixOpen, setMatrixOpen] = useState(false);
   const [batchOpen, setBatchOpen] = useState(false);
-  const [fontOpen, setFontOpen] = useState(false);
-  const {
-    prefs: fontPrefs,
-    mathFontStack,
-    textFontStack,
-    setMathFontId,
-    setTextFontId,
-    reset: resetFonts,
-  } = useFontStyle();
+  const [stylesOpen, setStylesOpen] = useState(false);
+  const [stylesEpoch, setStylesEpoch] = useState(0);
+  const { prefs: stylePrefs, commit: commitStyles } = useDefineStyles();
 
   const showToast = useCallback((message: string) => {
     setToast(message);
@@ -127,7 +120,6 @@ export default function App() {
       editorRef.current?.load(latex);
       showToast("Loaded formula from #eq=");
     };
-    // Wait one frame so <math-field> is mounted.
     const id = window.requestAnimationFrame(applyHash);
     window.addEventListener("hashchange", applyHash);
     return () => {
@@ -136,8 +128,8 @@ export default function App() {
     };
   }, [showToast]);
 
-const fontStatus = `Math: ${fontFaceLabel(fontPrefs.mathFontId)} · Text: ${fontFaceLabel(fontPrefs.textFontId)}`;
-  const status = toast || chordStatus || `${STATUS_BAR_LABEL} · ${fontStatus}`;
+  const styleStatus = `Var: ${stylePrefs.styles.variable.font} · Text: ${stylePrefs.styles.text.font}`;
+  const status = toast || chordStatus || `${STATUS_BAR_LABEL} · ${styleStatus}`;
 
   return (
     <div className="flex h-dvh flex-col bg-[#d4d4d4] sm:p-4">
@@ -149,12 +141,12 @@ const fontStatus = `Math: ${fontFaceLabel(fontPrefs.mathFontId)} · Text: ${font
           <div className="flex shrink-0 items-center gap-1 py-1.5">
             <button
               type="button"
-              title="Style / Font Settings（樣式／字體設定）"
+              title="Define Styles（定義樣式）"
               className={`h-7 border border-[#9a9a9a] px-2 text-[12px] leading-none hover:bg-white ${
-                fontOpen ? "bg-white" : "bg-[#f7f7f7]"
+                stylesOpen ? "bg-white" : "bg-[#f7f7f7]"
               }`}
               onMouseDown={keepFocus}
-              onClick={() => setFontOpen(true)}
+              onClick={() => setStylesOpen(true)}
             >
               Style…
             </button>
@@ -180,8 +172,7 @@ const fontStatus = `Math: ${fontFaceLabel(fontPrefs.mathFontId)} · Text: ${font
         <main className="relative min-h-0 flex-1">
           <MathEditor
             ref={editorRef}
-            mathFontStack={mathFontStack}
-            textFontStack={textFontStack}
+            stylesEpoch={stylesEpoch}
             onChordStatus={setChordStatus}
             onMatrixDialog={openMatrix}
           />
@@ -207,16 +198,15 @@ const fontStatus = `Math: ${fontFaceLabel(fontPrefs.mathFontId)} · Text: ${font
         </footer>
       </div>
       {matrixOpen ? <MatrixDialog onCancel={closeMatrix} onConfirm={confirmMatrix} /> : null}
-      {fontOpen ? (
-        <FontStyleDialog
-          prefs={fontPrefs}
-          onMathFontChange={setMathFontId}
-          onTextFontChange={setTextFontId}
-          onReset={() => {
-            resetFonts();
-            showToast("Fonts reset to default");
+      {stylesOpen ? (
+        <DefineStylesDialog
+          prefs={stylePrefs}
+          onCommit={(next, persist) => {
+            commitStyles(next, persist);
+            setStylesEpoch((n) => n + 1);
+            showToast("Styles applied");
           }}
-          onClose={() => setFontOpen(false)}
+          onClose={() => setStylesOpen(false)}
         />
       ) : null}
     </div>
