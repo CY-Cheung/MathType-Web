@@ -46,9 +46,21 @@ export async function mountExportNode(latex: string): Promise<HTMLElement> {
   await waitForFonts();
   const host = document.createElement("div");
   host.setAttribute("data-mt-export-host", "1");
-  // Inline line box so formula + baseline strut share one baseline (Word depth).
-  host.style.cssText =
-    "position:fixed;left:-10000px;top:0;z-index:-1;pointer-events:none;background:transparent;white-space:nowrap;line-height:normal;font-size:0;";
+  // Inline line box at body 10pt so formula + baseline strut share one alphabetic
+  // baseline (Word `vertical-align: -depth`). Avoid font-size:0 — it collapses the
+  // strut and under-reports depth, which makes equations float above body text.
+  host.style.cssText = [
+    "position:fixed",
+    "left:-10000px",
+    "top:0",
+    "z-index:-1",
+    "pointer-events:none",
+    "background:transparent",
+    "white-space:nowrap",
+    "line-height:normal",
+    `font-family:${FONT_FAMILY}`,
+    `font-size:${EXPORT_FONT_PT}pt`,
+  ].join(";");
   const node = document.createElement("span");
   node.className = "mt-export-formula";
   // No padding — padding inflated Word display size and skewed depth.
@@ -68,11 +80,20 @@ export async function mountExportNode(latex: string): Promise<HTMLElement> {
     defaultMode: "math",
     letterShapeStyle: "tex",
   });
+  // Empty inline-block: with overflow:hidden and no line boxes, its CSS baseline
+  // is the bottom margin edge — i.e. the shared alphabetic baseline.
   const marker = document.createElement("span");
   marker.setAttribute("data-mt-baseline", "1");
-  marker.textContent = "\u200b";
-  marker.style.cssText =
-    "display:inline-block;width:0;height:0;overflow:hidden;vertical-align:baseline;font-size:0;line-height:0;";
+  marker.style.cssText = [
+    "display:inline-block",
+    "width:0",
+    "height:0",
+    "overflow:hidden",
+    "vertical-align:baseline",
+    `font-family:${FONT_FAMILY}`,
+    `font-size:${EXPORT_FONT_PT}pt`,
+    "line-height:0",
+  ].join(";");
   host.appendChild(node);
   host.appendChild(marker);
   document.body.appendChild(host);
@@ -88,8 +109,27 @@ export function unmountExportNode(node: HTMLElement): void {
  * Depth below the math baseline in CSS px (formula box bottom − strut).
  * Used as Word `vertical-align: -Xpt` so the equals / math axis lines up
  * with surrounding body text.
+ *
+ * Prefer MathLive's own `ML__strut--bottom` vertical-align when present — it is
+ * the TeX depth in em and avoids DOM rounding that under-reports descent.
  */
 export function measureDepthPx(node: HTMLElement): number {
+  const fontPx = parseFloat(getComputedStyle(node).fontSize) || EXPORT_FONT_PT * (96 / 72);
+  const mlStrut = node.querySelector(".ML__strut--bottom");
+  if (mlStrut instanceof HTMLElement) {
+    const va = mlStrut.style.verticalAlign || getComputedStyle(mlStrut).verticalAlign;
+    // e.g. "-1.56em" or "-12.48px"
+    const em = /^(-?[\d.]+)em$/i.exec(va.trim());
+    if (em) {
+      const depthEm = Math.abs(parseFloat(em[1]));
+      if (Number.isFinite(depthEm) && depthEm > 0) return depthEm * fontPx;
+    }
+    const px = /^(-?[\d.]+)px$/i.exec(va.trim());
+    if (px) {
+      const depth = Math.abs(parseFloat(px[1]));
+      if (Number.isFinite(depth) && depth > 0) return depth;
+    }
+  }
   const marker = node.parentElement?.querySelector("[data-mt-baseline]");
   if (!(marker instanceof HTMLElement)) return 0;
   const depth = node.getBoundingClientRect().bottom - marker.getBoundingClientRect().bottom;
