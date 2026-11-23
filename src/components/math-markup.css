@@ -26,7 +26,10 @@
   font-style: var(--mt-ds-vectorMatrix-style, normal) !important;
 }
 
-.mt-markup .ML__op-group .ML__cmr {
+.mt-markup .ML__op-group .ML__cmr,
+.mt-markup .mt-ds-fn,
+.mt-markup .mt-ds-fn .ML__cmr,
+.mt-markup .mt-ds-fn .ML__mathit {
   font-family: var(--mt-ds-function-font, var(--mt-math-font)) !important;
   font-weight: var(--mt-ds-function-weight, 400) !important;
   font-style: var(--mt-ds-function-style, normal) !important;
@@ -37,6 +40,23 @@
   font-family: var(--mt-ds-number-font, var(--mt-math-font)) !important;
   font-weight: var(--mt-ds-number-weight, 400) !important;
   font-style: var(--mt-ds-number-style, normal) !important;
+}
+
+.mt-markup .ML__tt,
+.mt-markup .mt-ds-user1,
+.mt-markup .mt-ds-user1 .ML__cmr,
+.mt-markup .mt-ds-user1 .ML__tt {
+  font-family: var(--mt-ds-user1-font, "Courier New", monospace) !important;
+  font-weight: var(--mt-ds-user1-weight, 400) !important;
+  font-style: var(--mt-ds-user1-style, normal) !important;
+}
+
+.mt-markup .mt-ds-user2,
+.mt-markup .mt-ds-user2 .ML__cmr,
+.mt-markup .mt-ds-user2 .ML__mathit {
+  font-family: var(--mt-ds-user2-font, var(--mt-math-font)) !important;
+  font-weight: var(--mt-ds-user2-weight, 400) !important;
+  font-style: var(--mt-ds-user2-style, normal) !important;
 }
 
 .mt-markup .lcGreek,
