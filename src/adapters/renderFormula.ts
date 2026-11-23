@@ -13,8 +13,13 @@ const FONT_FAMILY = MT_FONT_STACK;
 /** SPEC Phase 2: 4× High-DPI PNG locked to physical 10pt. */
 export const DEFAULT_EXPORT_SCALE = 4;
 
-/** CSS px → pt (SPEC: depthPx * 0.75 → vertical-align pt). */
+/** CSS px → pt at 96 DPI (SPEC: depthPx * 0.75 → vertical-align pt). */
 export const PX_TO_PT = 0.75;
+
+/** Convert CSS px to pt, two decimal places (Word HTML inline styles). */
+export function pxToPt(px: number): number {
+  return Math.round(Math.max(0, px) * PX_TO_PT * 100) / 100;
+}
 
 /** Warm both the named Termes face and the TNR local()+url intercept. */
 const EXPORT_FONT_LOAD_SPECS = [
@@ -41,19 +46,22 @@ export async function mountExportNode(latex: string): Promise<HTMLElement> {
   await waitForFonts();
   const host = document.createElement("div");
   host.setAttribute("data-mt-export-host", "1");
+  // Inline line box so formula + baseline strut share one baseline (Word depth).
   host.style.cssText =
-    "position:fixed;left:-10000px;top:0;z-index:-1;pointer-events:none;background:transparent;white-space:nowrap;";
+    "position:fixed;left:-10000px;top:0;z-index:-1;pointer-events:none;background:transparent;white-space:nowrap;line-height:normal;font-size:0;";
   const node = document.createElement("span");
   node.className = "mt-export-formula";
+  // No padding — padding inflated Word display size and skewed depth.
   node.style.cssText = [
     "display:inline-block",
-    "padding:4px 6px",
+    "padding:0",
     "margin:0",
+    "border:0",
     "background:transparent",
     "color:#000",
     `font-family:${FONT_FAMILY}`,
     `font-size:${EXPORT_FONT_PT}pt`,
-    "line-height:1.2",
+    "line-height:normal",
     "vertical-align:baseline",
   ].join(";");
   node.innerHTML = convertLatexToMarkup(latex, {
@@ -64,7 +72,7 @@ export async function mountExportNode(latex: string): Promise<HTMLElement> {
   marker.setAttribute("data-mt-baseline", "1");
   marker.textContent = "\u200b";
   marker.style.cssText =
-    "display:inline-block;width:0;height:0;overflow:hidden;vertical-align:baseline;";
+    "display:inline-block;width:0;height:0;overflow:hidden;vertical-align:baseline;font-size:0;line-height:0;";
   host.appendChild(node);
   host.appendChild(marker);
   document.body.appendChild(host);
@@ -76,7 +84,11 @@ export function unmountExportNode(node: HTMLElement): void {
   node.parentElement?.remove();
 }
 
-/** Depth below baseline in CSS px (formula bottom − baseline marker). */
+/**
+ * Depth below the math baseline in CSS px (formula box bottom − strut).
+ * Used as Word `vertical-align: -Xpt` so the equals / math axis lines up
+ * with surrounding body text.
+ */
 export function measureDepthPx(node: HTMLElement): number {
   const marker = node.parentElement?.querySelector("[data-mt-baseline]");
   if (!(marker instanceof HTMLElement)) return 0;
@@ -89,11 +101,14 @@ export type RasterResult = {
   dataUrl: string;
   width: number;
   height: number;
-  /** CSS display size (10pt), not the 4× bitmap size. */
+  /** CSS display size in px (10pt face), not the 4× bitmap size. */
   cssWidth: number;
   cssHeight: number;
+  /** Display size in pt for Word HTML `width`/`height` styles. */
+  widthPt: number;
+  heightPt: number;
   scale: number;
-  /** `vertical-align: -Xpt` magnitude from SPEC px×0.75. */
+  /** `vertical-align: -Xpt` magnitude (depth below baseline). */
   baselinePt: number;
 };
 
@@ -103,9 +118,11 @@ export async function renderFormulaPng(
 ): Promise<RasterResult> {
   const node = await mountExportNode(latex);
   try {
+    const rect = node.getBoundingClientRect();
     const depthPx = measureDepthPx(node);
-    const cssWidth = Math.max(1, Math.ceil(node.getBoundingClientRect().width));
-    const cssHeight = Math.max(1, Math.ceil(node.getBoundingClientRect().height));
+    // Prefer fractional px → pt for Word; keep integer px attrs for CF_HTML.
+    const cssWidth = Math.max(1, rect.width);
+    const cssHeight = Math.max(1, rect.height);
     const dataUrl = await toPng(node, {
       pixelRatio: scale,
       backgroundColor: "transparent",
@@ -121,8 +138,10 @@ export async function renderFormulaPng(
       height: img.naturalHeight,
       cssWidth,
       cssHeight,
+      widthPt: pxToPt(cssWidth),
+      heightPt: pxToPt(cssHeight),
       scale,
-      baselinePt: Math.round(depthPx * PX_TO_PT * 100) / 100,
+      baselinePt: pxToPt(depthPx),
     };
   } finally {
     unmountExportNode(node);
