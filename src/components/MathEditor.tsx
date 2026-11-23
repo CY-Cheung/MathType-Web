@@ -4,6 +4,7 @@ import { attachAndroidBackspaceBridge } from "../adapters/androidBackspaceBridge
 import { commitPendingComposition } from "../adapters/commitComposition";
 import {
   applyActiveStyleToField,
+  bindInsertStyleHook,
   insertStyledLetter,
   lockModeToActiveStyle,
 } from "../core/activeStyleApply";
@@ -17,7 +18,6 @@ import {
 import { useMathShortcuts } from "../core/useMathShortcuts";
 import {
   DEFAULT_ACTIVE_STYLE,
-  inferActiveStyleFromAtom,
   parseModeForActiveStyle,
   type ActiveStyleId,
 } from "../types/activeStyle";
@@ -122,8 +122,6 @@ type MathEditorProps = {
   /** Active Style Switcher selection (Math / Text / Function / …). */
   activeStyle?: ActiveStyleId;
   onActiveStyleChange?: (id: ActiveStyleId) => void;
-  /** Inferred style at caret / selection (for status bar). */
-  onCursorStyleChange?: (id: ActiveStyleId) => void;
   onChordStatus?: (status: string) => void;
   onMatrixDialog?: () => void;
 };
@@ -141,18 +139,6 @@ export type MathEditorHandle = {
   applyActiveStyle: (id: ActiveStyleId) => void;
 };
 
-function readCursorStyle(
-  field: MathfieldElement,
-  fallback: ActiveStyleId,
-): ActiveStyleId {
-  try {
-    const info = field.getElementInfo(field.position);
-    return inferActiveStyleFromAtom(info?.mode ?? field.mode, info?.style, fallback);
-  } catch {
-    return inferActiveStyleFromAtom(field.mode, undefined, fallback);
-  }
-}
-
 export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
   function MathEditor(
     {
@@ -160,7 +146,6 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
       stylesEpoch = 0,
       activeStyle = DEFAULT_ACTIVE_STYLE,
       onActiveStyleChange,
-      onCursorStyleChange,
       onChordStatus,
       onMatrixDialog,
     },
@@ -195,7 +180,11 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
       field.defaultMode = "math";
       // Prevent MathLive prose auto-flips that leave Active Style stuck on Text.
       field.smartMode = false;
-      field.placeholder = String.raw`\text{Type a formula}`;
+      // Avoid `\text{...}` placeholder — it suggested text/roman to the status
+      // inference path and to IME after an empty canvas.
+      field.placeholder = "Type a formula";
+      // Active Style owns insert style (do not inherit upright from digits).
+      bindInsertStyleHook(field, () => activeStyleRef.current);
       // Drop built-in Quote / Alt+T math↔text toggles — Active Style owns mode.
       try {
         const bindings = field.keybindings ?? [];
@@ -239,9 +228,18 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
       detachBackspaceBridge?.();
       detachBackspaceBridge = attachAndroidBackspaceBridge(field, {
         onAfterDelete: () => {
+          // Select-all / clear must leave Math insertion style, not roman.
           lockModeToActiveStyle(field, activeStyleRef.current);
         },
       });
+    };
+
+    /** After the canvas is emptied, re-lock mode + clear inherited upright. */
+    const onInput = () => {
+      if (cancelled || fieldRef.current !== field) return;
+      const latex = field.getValue("latex") ?? "";
+      if (latex.trim() !== "") return;
+      lockModeToActiveStyle(field, activeStyleRef.current);
     };
 
     /** Re-assert inputmode + focus the sink inside the user gesture (Android). */
@@ -265,6 +263,7 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
     configure();
     field.addEventListener("focusin", onFocusIn);
     field.addEventListener("pointerup", onPointerUp);
+    field.addEventListener("input", onInput);
     return () => {
       cancelled = true;
       slotObserver?.disconnect();
@@ -272,6 +271,7 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
       detachBackspaceBridge?.();
       field.removeEventListener("focusin", onFocusIn);
       field.removeEventListener("pointerup", onPointerUp);
+      field.removeEventListener("input", onInput);
     };
   }, [stylesEpoch]);
 
@@ -279,24 +279,18 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
   useEffect(() => {
     const field = fieldRef.current;
     if (!field) return;
+    bindInsertStyleHook(field, () => activeStyleRef.current);
     applyActiveStyleToField(field, activeStyle);
   }, [activeStyle]);
 
-  // Report caret style for status bar; handle Style shortcuts + Function letters.
+  // Keep mode on Active Style; handle Style shortcuts + Function letters.
   useEffect(() => {
     const field = fieldRef.current;
     if (!field) return;
     let reasserting = false;
 
-    const reportCursor = () => {
-      onCursorStyleChange?.(readCursorStyle(field, activeStyleRef.current));
-    };
-
     const onModeChange = () => {
-      if (reasserting) {
-        reportCursor();
-        return;
-      }
+      if (reasserting) return;
       const active = activeStyleRef.current;
       const expected = parseModeForActiveStyle(active);
       // Snap back if MathLive / IME drifted to text without an Active Style change.
@@ -310,7 +304,6 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
           });
         }
       }
-      reportCursor();
     };
 
     const onKeyDown = (event: KeyboardEvent) => {
@@ -343,16 +336,13 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
       }
     };
 
-    field.addEventListener("selection-change", reportCursor);
     field.addEventListener("mode-change", onModeChange);
     field.addEventListener("keydown", onKeyDown, true);
-    reportCursor();
     return () => {
-      field.removeEventListener("selection-change", reportCursor);
       field.removeEventListener("mode-change", onModeChange);
       field.removeEventListener("keydown", onKeyDown, true);
     };
-  }, [onActiveStyleChange, onCursorStyleChange]);
+  }, [onActiveStyleChange]);
 
   useEffect(() => {
     onChordStatus?.(chordStatus);

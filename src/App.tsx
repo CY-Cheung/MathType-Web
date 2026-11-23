@@ -45,8 +45,8 @@ export default function App() {
   const [batchOpen, setBatchOpen] = useState(false);
   const [stylesOpen, setStylesOpen] = useState(false);
   const [stylesEpoch, setStylesEpoch] = useState(0);
+  // Single source for toolbar + status-bar Style (default Math).
   const [activeStyle, setActiveStyle] = useState<ActiveStyleId>(DEFAULT_ACTIVE_STYLE);
-  const [cursorStyle, setCursorStyle] = useState<ActiveStyleId>(DEFAULT_ACTIVE_STYLE);
   const { prefs: stylePrefs, commit: commitStyles } = useDefineStyles();
   const { zoomPercent, setZoomPercent } = useWorkspaceZoom();
 
@@ -59,7 +59,6 @@ export default function App() {
   const changeActiveStyle = useCallback(
     (id: ActiveStyleId) => {
       setActiveStyle(id);
-      setCursorStyle(id);
       showToast(`Style: ${activeStyleLabel(id)}`);
     },
     [showToast],
@@ -234,7 +233,6 @@ export default function App() {
             stylesEpoch={stylesEpoch}
             activeStyle={activeStyle}
             onActiveStyleChange={changeActiveStyle}
-            onCursorStyleChange={setCursorStyle}
             onChordStatus={setChordStatus}
             onMatrixDialog={openMatrix}
           />
@@ -253,7 +251,7 @@ export default function App() {
             <ZoomSwitcher zoomPercent={zoomPercent} onChange={changeZoom} />
             <StyleSwitcher
               compact
-              activeStyle={cursorStyle}
+              activeStyle={activeStyle}
               onChange={changeActiveStyle}
               onOpenDefineStyles={() => setStylesOpen(true)}
             />
