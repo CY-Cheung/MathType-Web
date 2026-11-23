@@ -13,14 +13,14 @@ const SHADOW_STYLE_ID = "mt-10pt-shadow";
 /** Shadow CSS: Times for letters; stretchy glyphs stay on MathLive fonts. */
 export const MATHFIELD_SHADOW_CSS = `
 :host {
-  --_text-font-family: var(--mt-font-family, "Times New Roman", "Liberation Serif", Times, serif);
-  font-family: var(--mt-font-family, "Times New Roman", "Liberation Serif", Times, serif);
+  --_text-font-family: var(--mt-font-family, "Times New Roman", "TeX Gyre Termes", "Liberation Serif", Times, serif);
+  font-family: var(--mt-font-family, "Times New Roman", "TeX Gyre Termes", "Liberation Serif", Times, serif);
 }
 .ML__cmr,
 .ML__mathbf,
 .ML__text,
 .ML__content-placeholder {
-  font-family: var(--mt-font-family, "Times New Roman", "Liberation Serif", Times, serif) !important;
+  font-family: var(--mt-font-family, "Times New Roman", "TeX Gyre Termes", "Liberation Serif", Times, serif) !important;
 }
 /* MathLive 0.111 draws \\placeholder{} as U+25A2 on span.ML__cmr. */
 .mt-empty-slot {
@@ -39,7 +39,7 @@ export const MATHFIELD_SHADOW_CSS = `
 .ML__mathit,
 .ML__mathbfit,
 .lcGreek.ML__mathbf {
-  font-family: var(--mt-font-family, "Times New Roman", "Liberation Serif", Times, serif) !important;
+  font-family: var(--mt-font-family, "Times New Roman", "TeX Gyre Termes", "Liberation Serif", Times, serif) !important;
   font-style: italic;
 }
 .ML__virtual-keyboard-toggle,
@@ -49,7 +49,7 @@ export const MATHFIELD_SHADOW_CSS = `
 `;
 
 function fontStack(fontFamily: string): string {
-  return `"${fontFamily}", "Liberation Serif", Times, serif`;
+  return `"${fontFamily}", "TeX Gyre Termes", "Liberation Serif", Times, serif`;
 }
 
 const EMPTY_SLOT = "\u25A2";

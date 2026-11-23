@@ -7,7 +7,7 @@
 .mt-markup .ML__mathit,
 .mt-markup .ML__mathbf,
 .mt-markup .ML__cmr {
-  font-family: "Times New Roman", "Liberation Serif", Times, serif !important;
+  font-family: "Times New Roman", "TeX Gyre Termes", "Liberation Serif", Times, serif !important;
 }
 
 .mt-markup .ML__mathit {

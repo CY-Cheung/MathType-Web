@@ -5,7 +5,7 @@
  */
 
 :root {
-  --mt-font-family: "Times New Roman", "Liberation Serif", Times, serif;
+  --mt-font-family: "Times New Roman", "TeX Gyre Termes", "Liberation Serif", Times, serif;
   --mt-style: Math;
   --mt-size-name: Full;
   --mt-full-pt: 10;
