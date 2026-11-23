@@ -9,7 +9,7 @@ import {
   lockModeToActiveStyle,
 } from "../core/activeStyleApply";
 import { focusAt, readSelection, type EditorSelection } from "../core/editorSelection";
-import { adaptInsertTemplate } from "../core/insertTemplate";
+import { insertAdaptedLatex } from "../core/insertAdapted";
 import {
   isMathStyleShortcut,
   isTextStyleShortcut,
@@ -115,6 +115,12 @@ function unlockFieldNativeKeyboard(field: MathfieldElement): HTMLElement | null 
   return sink;
 }
 
+/** Host `data-empty` drives the CSS "Type a formula" overlay (spaces preserved). */
+function syncEmptyPlaceholder(field: MathfieldElement): void {
+  const empty = !(field.getValue("latex") ?? "").trim();
+  field.toggleAttribute("data-empty", empty);
+}
+
 type MathEditorProps = {
   preset?: StylePreset;
   /** Bumps when Define Styles commit so shadow CSS / CSS vars refresh. */
@@ -154,7 +160,12 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
   const fieldRef = useRef<MathfieldElement>(null);
   const activeStyleRef = useRef(activeStyle);
   activeStyleRef.current = activeStyle;
-  const { chordStatus } = useMathShortcuts(fieldRef, onMatrixDialog);
+  /** Blocks mode-change snap-back while Text briefly enters math for scripts. */
+  const suppressModeLockRef = useRef(false);
+  const { chordStatus } = useMathShortcuts(fieldRef, onMatrixDialog, {
+    getActiveStyle: () => activeStyleRef.current,
+    suppressModeLock: suppressModeLockRef,
+  });
   const viewSize = `calc(${preset.fullPt}pt * ${preset.zoomPercent} / 100)`;
 
   useEffect(() => {
@@ -180,9 +191,9 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
       field.defaultMode = "math";
       // Prevent MathLive prose auto-flips that leave Active Style stuck on Text.
       field.smartMode = false;
-      // Avoid `\text{...}` placeholder — it suggested text/roman to the status
-      // inference path and to IME after an empty canvas.
-      field.placeholder = "Type a formula";
+      // Empty-canvas hint is a CSS overlay (`data-empty`) — MathLive's latex
+      // placeholder ate spaces ("Typeaformula") and `\text{…}` polluted mode.
+      field.placeholder = "";
       // Active Style owns insert style (do not inherit upright from digits).
       bindInsertStyleHook(field, () => activeStyleRef.current);
       // Drop built-in Quote / Alt+T math↔text toggles — Active Style owns mode.
@@ -205,10 +216,14 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
       applyShadowStyle(field);
       unlockFieldNativeKeyboard(field);
       markEmptySlots(root);
+      syncEmptyPlaceholder(field);
       lockModeToActiveStyle(field, activeStyleRef.current);
 
       slotObserver?.disconnect();
-      slotObserver = new MutationObserver(() => markEmptySlots(root));
+      slotObserver = new MutationObserver(() => {
+        markEmptySlots(root);
+        syncEmptyPlaceholder(field);
+      });
       slotObserver.observe(root, { childList: true, subtree: true, characterData: true });
 
       // MathLive may recreate the sink or rewrite inputmode=none — force text back.
@@ -237,6 +252,7 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
     /** After the canvas is emptied, re-lock mode + clear inherited upright. */
     const onInput = () => {
       if (cancelled || fieldRef.current !== field) return;
+      syncEmptyPlaceholder(field);
       const latex = field.getValue("latex") ?? "";
       if (latex.trim() !== "") return;
       lockModeToActiveStyle(field, activeStyleRef.current);
@@ -290,7 +306,7 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
     let reasserting = false;
 
     const onModeChange = () => {
-      if (reasserting) return;
+      if (reasserting || suppressModeLockRef.current) return;
       const active = activeStyleRef.current;
       const expected = parseModeForActiveStyle(active);
       // Snap back if MathLive / IME drifted to text without an Active Style change.
@@ -352,14 +368,12 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
     insert(latex: string, at?: EditorSelection | null) {
       const field = fieldRef.current;
       if (!field) return;
-      // Finish Samsung/Gboard composition before toolbar / favorites insert.
-      commitPendingComposition(field);
       focusAt(field, at);
-      const hasSelection = !field.selectionIsCollapsed;
-      const adapted = adaptInsertTemplate(toMathliveTemplate(latex), hasSelection);
-      field.executeCommand(["insert", adapted]);
-      // Toolbar clicks can leave mode=`text`; snap back to Active Style.
-      lockModeToActiveStyle(field, activeStyleRef.current);
+      insertAdaptedLatex(field, latex, {
+        activeStyle: activeStyleRef.current,
+        suppressModeLock: suppressModeLockRef,
+      });
+      syncEmptyPlaceholder(field);
       field.focus();
       const sink = findKeyboardSink(field);
       sink?.focus({ preventScroll: true });
@@ -370,6 +384,7 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
       commitPendingComposition(field);
       field.setValue(toMathliveTemplate(latex));
       lockModeToActiveStyle(field, activeStyleRef.current);
+      syncEmptyPlaceholder(field);
       field.focus();
     },
     capture() {

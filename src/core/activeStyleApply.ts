@@ -56,6 +56,57 @@ export function lockModeToActiveStyle(
 }
 
 /**
+ * Collapse a placeholder selection to a caret inside the slot.
+ * MathLive `switchMode` rewrites a selected `\placeholder{}` (see getContent
+ * treating placeholder as empty suffix) — that would destroy a fresh script.
+ */
+export function collapsePlaceholderSelection(field: MathfieldElement): void {
+  if (field.selectionIsCollapsed) return;
+  try {
+    const ranges = field.selection?.ranges;
+    if (!ranges?.length) return;
+    const [start, end] = ranges[0];
+    const pos = start === end ? start : Math.min(start + 1, end);
+    field.selection = { ranges: [[pos, pos]] };
+  } catch {
+    /* selection may be frozen on some builds */
+  }
+}
+
+/** Place a collapsed caret at the end of the current selection (or stay). */
+export function collapseSelectionToEnd(field: MathfieldElement): void {
+  try {
+    const ranges = field.selection?.ranges;
+    if (!ranges?.length) return;
+    const end = ranges[0][1];
+    field.selection = { ranges: [[end, end]] };
+  } catch {
+    /* selection may be frozen on some builds */
+  }
+}
+
+/**
+ * Restore mode + default insertion style only — do not restyle / wrap the
+ * current selection. Used after opening a script slot so the selected
+ * `\placeholder{}` is not rewritten by Function/`\mathrm` wraps.
+ */
+export function restoreInsertionStyleOnly(
+  field: MathfieldElement,
+  id: ActiveStyleId,
+): void {
+  const mode = parseModeForActiveStyle(id);
+  clearInsertionStyle(field);
+  // Collapse first so switchMode does not extract/replace the placeholder.
+  collapsePlaceholderSelection(field);
+  if (field.mode !== mode) {
+    field.executeCommand(["switchMode", mode]);
+  }
+  if (id !== "math") {
+    field.applyStyle(mathLiveStyleFor(id), { operation: "set" });
+  }
+}
+
+/**
  * Switch mode + set insertion style; if there is a selection, restyle it too.
  * Function / User styles also wrap the selection in `\\class{mt-ds-*}{...}` so
  * Define Styles CSS vars apply distinctly from Number / Variable.
