@@ -1,11 +1,14 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import type { MathfieldElement } from "mathlive";
 import { attachAndroidBackspaceBridge } from "../adapters/androidBackspaceBridge";
+import { commitPendingComposition } from "../adapters/commitComposition";
 import {
   applyActiveStyleToField,
   insertStyledLetter,
+  lockModeToActiveStyle,
 } from "../core/activeStyleApply";
 import { focusAt, readSelection, type EditorSelection } from "../core/editorSelection";
+import { adaptInsertTemplate } from "../core/insertTemplate";
 import {
   isMathStyleShortcut,
   isTextStyleShortcut,
@@ -15,6 +18,7 @@ import { useMathShortcuts } from "../core/useMathShortcuts";
 import {
   DEFAULT_ACTIVE_STYLE,
   inferActiveStyleFromAtom,
+  parseModeForActiveStyle,
   type ActiveStyleId,
 } from "../types/activeStyle";
 import { buildDefineStylesMappedCss } from "../types/defineStyles";
@@ -189,7 +193,21 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
       field.menuItems = [];
       field.letterShapeStyle = "tex";
       field.defaultMode = "math";
+      // Prevent MathLive prose auto-flips that leave Active Style stuck on Text.
+      field.smartMode = false;
       field.placeholder = String.raw`\text{Type a formula}`;
+      // Drop built-in Quote / Alt+T math↔text toggles — Active Style owns mode.
+      try {
+        const bindings = field.keybindings ?? [];
+        field.keybindings = bindings.filter((row) => {
+          const cmd = Array.isArray(row.command) ? row.command[0] : row.command;
+          if (cmd !== "switchMode") return true;
+          const target = Array.isArray(row.command) ? row.command[1] : undefined;
+          return target === "latex";
+        });
+      } catch {
+        /* keybindings may be frozen on some builds */
+      }
       const root = field.shadowRoot;
       if (!root) {
         requestAnimationFrame(configure);
@@ -198,6 +216,7 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
       applyShadowStyle(field);
       unlockFieldNativeKeyboard(field);
       markEmptySlots(root);
+      lockModeToActiveStyle(field, activeStyleRef.current);
 
       slotObserver?.disconnect();
       slotObserver = new MutationObserver(() => markEmptySlots(root));
@@ -218,7 +237,11 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
 
       // Touch / Android: ZWSP sentinel so OS Backspace still reaches MathLive.
       detachBackspaceBridge?.();
-      detachBackspaceBridge = attachAndroidBackspaceBridge(field);
+      detachBackspaceBridge = attachAndroidBackspaceBridge(field, {
+        onAfterDelete: () => {
+          lockModeToActiveStyle(field, activeStyleRef.current);
+        },
+      });
     };
 
     /** Re-assert inputmode + focus the sink inside the user gesture (Android). */
@@ -263,9 +286,31 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
   useEffect(() => {
     const field = fieldRef.current;
     if (!field) return;
+    let reasserting = false;
 
     const reportCursor = () => {
       onCursorStyleChange?.(readCursorStyle(field, activeStyleRef.current));
+    };
+
+    const onModeChange = () => {
+      if (reasserting) {
+        reportCursor();
+        return;
+      }
+      const active = activeStyleRef.current;
+      const expected = parseModeForActiveStyle(active);
+      // Snap back if MathLive / IME drifted to text without an Active Style change.
+      if (field.mode !== expected) {
+        reasserting = true;
+        try {
+          lockModeToActiveStyle(field, active);
+        } finally {
+          queueMicrotask(() => {
+            reasserting = false;
+          });
+        }
+      }
+      reportCursor();
     };
 
     const onKeyDown = (event: KeyboardEvent) => {
@@ -293,17 +338,18 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
       ) {
         event.preventDefault();
         event.stopPropagation();
+        commitPendingComposition(field);
         insertStyledLetter(field, style, event.key);
       }
     };
 
     field.addEventListener("selection-change", reportCursor);
-    field.addEventListener("mode-change", reportCursor);
+    field.addEventListener("mode-change", onModeChange);
     field.addEventListener("keydown", onKeyDown, true);
     reportCursor();
     return () => {
       field.removeEventListener("selection-change", reportCursor);
-      field.removeEventListener("mode-change", reportCursor);
+      field.removeEventListener("mode-change", onModeChange);
       field.removeEventListener("keydown", onKeyDown, true);
     };
   }, [onActiveStyleChange, onCursorStyleChange]);
@@ -316,14 +362,24 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
     insert(latex: string, at?: EditorSelection | null) {
       const field = fieldRef.current;
       if (!field) return;
+      // Finish Samsung/Gboard composition before toolbar / favorites insert.
+      commitPendingComposition(field);
       focusAt(field, at);
-      field.executeCommand(["insert", toMathliveTemplate(latex)]);
+      const hasSelection = !field.selectionIsCollapsed;
+      const adapted = adaptInsertTemplate(toMathliveTemplate(latex), hasSelection);
+      field.executeCommand(["insert", adapted]);
+      // Toolbar clicks can leave mode=`text`; snap back to Active Style.
+      lockModeToActiveStyle(field, activeStyleRef.current);
       field.focus();
+      const sink = findKeyboardSink(field);
+      sink?.focus({ preventScroll: true });
     },
     load(latex: string) {
       const field = fieldRef.current;
       if (!field) return;
+      commitPendingComposition(field);
       field.setValue(toMathliveTemplate(latex));
+      lockModeToActiveStyle(field, activeStyleRef.current);
       field.focus();
     },
     capture() {

@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import type { MathfieldElement } from "mathlive";
+import { commitPendingComposition } from "../adapters/commitComposition";
+import { adaptInsertTemplate } from "./insertTemplate";
 import {
   CHORD_STATUS,
   chordStart,
@@ -12,7 +14,12 @@ import {
 } from "./shortcuts";
 
 function insertTemplate(field: MathfieldElement, template: string): void {
-  field.executeCommand(["insert", toMathliveTemplate(template)]);
+  commitPendingComposition(field);
+  const adapted = adaptInsertTemplate(
+    toMathliveTemplate(template),
+    !field.selectionIsCollapsed,
+  );
+  field.executeCommand(["insert", adapted]);
 }
 
 /**

@@ -27,6 +27,18 @@ export function clearInsertionStyle(field: MathfieldElement): void {
 }
 
 /**
+ * Force MathLive parse mode + insertion style to match Active Style.
+ * Used after Android Backspace / toolbar inserts that can drift `mode` to `text`
+ * (so `^` becomes a literal instead of starting a superscript).
+ */
+export function lockModeToActiveStyle(
+  field: MathfieldElement,
+  id: ActiveStyleId,
+): void {
+  applyActiveStyleToField(field, id);
+}
+
+/**
  * Switch mode + set insertion style; if there is a selection, restyle it too.
  * Function / User styles also wrap the selection in `\\class{mt-ds-*}{...}` so
  * Define Styles CSS vars apply distinctly from Number / Variable.
