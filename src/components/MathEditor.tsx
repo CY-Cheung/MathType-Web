@@ -2,6 +2,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import type { MathfieldElement } from "mathlive";
 import { attachAndroidBackspaceBridge } from "../adapters/androidBackspaceBridge";
 import { commitPendingComposition } from "../adapters/commitComposition";
+import { attachImeCompositionGuard } from "../adapters/imeCompositionGuard";
 import {
   applyActiveStyleToField,
   bindInsertStyleHook,
@@ -44,6 +45,15 @@ export const MATHFIELD_SHADOW_CSS = `
   --_text-highlight-background-color: transparent;
   --contains-highlight-background-color: transparent;
   --_contains-highlight-background-color: transparent;
+  /* Neutralize Samsung / MathLive brown IME composition highlight. */
+  --composition-background-color: transparent;
+  --_composition-background-color: transparent;
+  --composition-underline-color: transparent;
+  --_composition-underline-color: transparent;
+}
+.ML__composition {
+  background: transparent !important;
+  text-decoration: none !important;
 }
 ${buildDefineStylesMappedCss("")}
 /* MathLive 0.111 draws \\placeholder{} as U+25A2 on span.ML__cmr. */
@@ -183,6 +193,7 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
     let slotObserver: MutationObserver | null = null;
     let inputModeObserver: MutationObserver | null = null;
     let detachBackspaceBridge: (() => void) | null = null;
+    let detachImeGuard: (() => void) | null = null;
 
     const configure = () => {
       if (cancelled || fieldRef.current !== field) return;
@@ -243,7 +254,13 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
         subtree: true,
         childList: true,
         attributes: true,
-        attributeFilter: ["inputmode", "autocorrect", "autocapitalize", "spellcheck"],
+        attributeFilter: [
+          "inputmode",
+          "autocorrect",
+          "autocapitalize",
+          "autocomplete",
+          "spellcheck",
+        ],
       });
 
       // Touch / Android: ZWSP sentinel so OS Backspace still reaches MathLive.
@@ -254,6 +271,10 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
           lockModeToActiveStyle(field, activeStyleRef.current);
         },
       });
+
+      // Samsung IME: clear residual sink after shortcuts; dismiss stuck composition.
+      detachImeGuard?.();
+      detachImeGuard = attachImeCompositionGuard(field);
     };
 
     /** After the canvas is emptied, re-lock mode + clear inherited upright. */
@@ -292,6 +313,7 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
       slotObserver?.disconnect();
       inputModeObserver?.disconnect();
       detachBackspaceBridge?.();
+      detachImeGuard?.();
       field.removeEventListener("focusin", onFocusIn);
       field.removeEventListener("pointerup", onPointerUp);
       field.removeEventListener("input", onInput);

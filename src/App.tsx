@@ -21,6 +21,7 @@ import {
 } from "./core/shortcuts";
 import { useDefineStyles } from "./hooks/useDefineStyles";
 import { useExportPrefs } from "./hooks/useExportPrefs";
+import { useVisualViewportLock } from "./hooks/useVisualViewportLock";
 import { useWorkspaceZoom } from "./hooks/useWorkspaceZoom";
 import {
   activeStyleLabel,
@@ -52,6 +53,7 @@ export default function App() {
   const { prefs: stylePrefs, commit: commitStyles } = useDefineStyles();
   const { zoomPercent, setZoomPercent } = useWorkspaceZoom();
   const { plainImageNoLink, setPlainImageNoLink } = useExportPrefs();
+  const viewportHeight = useVisualViewportLock();
 
   const showToast = useCallback((message: string) => {
     setToast(message);
@@ -231,49 +233,66 @@ export default function App() {
   const faceHint = `Var: ${stylePrefs.styles.variable.font} · Text: ${stylePrefs.styles.text.font}`;
   const statusBase = toast || chordStatus || `${sizeHint} · ${faceHint}`;
 
+  const batchCopyControls = (
+    <>
+      <button
+        type="button"
+        title="Batch .docx — scan formulas (Phase 3 Step 1)"
+        className={`h-7 border border-[#9a9a9a] px-2 text-[12px] leading-none hover:bg-white ${
+          batchOpen ? "bg-white" : "bg-[#f7f7f7]"
+        }`}
+        onMouseDown={keepFocus}
+        onClick={() => setBatchOpen((open) => !open)}
+      >
+        Batch
+      </button>
+      <ExportMenu
+        busy={exportBusy}
+        plainImageNoLink={plainImageNoLink}
+        onPlainImageNoLinkChange={togglePlainImageNoLink}
+        onExport={(format) => void runExport(format)}
+      />
+    </>
+  );
+
   return (
-    <div className="flex h-dvh w-full max-w-[100vw] flex-col overflow-x-hidden bg-[#d4d4d4] sm:p-4">
+    <div
+      className="flex w-full max-w-[100vw] flex-col overflow-hidden bg-[#d4d4d4] sm:p-4"
+      style={{
+        height: viewportHeight > 0 ? `${viewportHeight}px` : "100dvh",
+        maxHeight: viewportHeight > 0 ? `${viewportHeight}px` : "100dvh",
+      }}
+    >
       <div className="relative flex min-h-0 w-full max-w-full flex-1 flex-col overflow-hidden border border-[#b4b4b4] bg-white shadow-sm">
-        <MenuBar
-          activeStyle={activeStyle}
-          zoomPercent={zoomPercent}
-          plainImageNoLink={plainImageNoLink}
-          onActiveStyleChange={changeActiveStyle}
-          onZoomChange={changeZoom}
-          onPlainImageNoLinkChange={togglePlainImageNoLink}
-          onOpenDefineStyles={() => setStylesOpen(true)}
-          onEdit={runEdit}
-          onExportMathMl={() => void runExport("mathml")}
-        />
-        <div className="flex min-w-0 items-stretch gap-1 border-b border-[#b5b5b5] bg-[#e6e6e6] pr-1">
-          <div className="min-w-0 flex-1 overflow-x-auto">
+        <div className="shrink-0">
+          <MenuBar
+            activeStyle={activeStyle}
+            zoomPercent={zoomPercent}
+            plainImageNoLink={plainImageNoLink}
+            onActiveStyleChange={changeActiveStyle}
+            onZoomChange={changeZoom}
+            onPlainImageNoLinkChange={togglePlainImageNoLink}
+            onOpenDefineStyles={() => setStylesOpen(true)}
+            onEdit={runEdit}
+            onExportMathMl={() => void runExport("mathml")}
+          />
+        </div>
+        {/* Narrow: Batch/Copy on their own top row; sm+: same row, right of symbols. */}
+        <div className="flex min-w-0 shrink-0 flex-col border-b border-[#b5b5b5] bg-[#e6e6e6] sm:flex-row sm:items-stretch sm:pr-1">
+          <div className="order-1 flex shrink-0 items-center justify-end gap-1 px-1 py-1 sm:order-2 sm:self-start sm:py-1.5">
+            {batchCopyControls}
+          </div>
+          <div className="order-2 min-w-0 flex-1 overflow-x-auto sm:order-1">
             <Toolbar onInsert={(latex) => editorRef.current?.insert(latex)} onOpenMatrix={openMatrix} />
           </div>
-          <div className="flex shrink-0 items-center gap-1 self-start py-1.5">
-            <button
-              type="button"
-              title="Batch .docx — scan formulas (Phase 3 Step 1)"
-              className={`h-7 border border-[#9a9a9a] px-2 text-[12px] leading-none hover:bg-white ${
-                batchOpen ? "bg-white" : "bg-[#f7f7f7]"
-              }`}
-              onMouseDown={keepFocus}
-              onClick={() => setBatchOpen((open) => !open)}
-            >
-              Batch
-            </button>
-            <ExportMenu
-              busy={exportBusy}
-              plainImageNoLink={plainImageNoLink}
-              onPlainImageNoLinkChange={togglePlainImageNoLink}
-              onExport={(format) => void runExport(format)}
-            />
-          </div>
         </div>
-        <FavoritesBar
-          onInsert={(latex) => editorRef.current?.insert(latex)}
-          onCapture={() => editorRef.current?.capture() ?? ""}
-        />
-        <main className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
+        <div className="shrink-0">
+          <FavoritesBar
+            onInsert={(latex) => editorRef.current?.insert(latex)}
+            onCapture={() => editorRef.current?.capture() ?? ""}
+          />
+        </div>
+        <main className="relative min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
           <MathEditor
             ref={editorRef}
             preset={preset}
@@ -292,7 +311,7 @@ export default function App() {
             />
           ) : null}
         </main>
-        <footer className="relative flex min-w-0 items-center justify-between gap-2 border-t border-[#c6c6c6] bg-[#f3f3f3] px-2 py-1.5 font-sans text-[12px] leading-snug text-[#1a1a1a]">
+        <footer className="relative flex min-w-0 shrink-0 items-center justify-between gap-2 border-t border-[#c6c6c6] bg-[#f3f3f3] px-2 py-1.5 font-sans text-[12px] leading-snug text-[#1a1a1a]">
           <div className="min-w-0 flex-1 truncate">{statusBase}</div>
           <div className="flex shrink-0 items-center gap-1">
             <ZoomSwitcher zoomPercent={zoomPercent} onChange={changeZoom} />
