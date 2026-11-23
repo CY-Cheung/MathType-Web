@@ -83,9 +83,6 @@ export async function copyMathMl(latex: string): Promise<ClipboardExportResult> 
     return writeLatexFallback(latex, "no ClipboardItem");
   }
   const html = wrapMathMlForWord(mathMl);
-  // Chromium only accepts a small MIME allow-list on ClipboardItem.
-  // Prefer text/html (Word reads the embedded MathML). Optionally add
-  // application/mathml+xml when the browser accepts it.
   const attempts: Record<string, Blob>[] = [
     {
       "text/html": new Blob([html], { type: "text/html" }),
@@ -108,14 +105,43 @@ export async function copyMathMl(latex: string): Promise<ClipboardExportResult> 
   return writeLatexFallback(latex, "MathML write failed");
 }
 
-/** Inline styles that stop Word from drawing a hyperlink underline on the eq image. */
+/** Shared no-decoration bits for Word CF_HTML (Hyperlink style is stubborn). */
 const NO_LINK_DECORATION =
-  "text-decoration:none;border:none;border-bottom:none;outline:none;box-shadow:none;";
+  "text-decoration:none;border:none;border-bottom:none;outline:none;box-shadow:none;text-underline:none;";
 
 /**
- * SPEC: 4× PNG inside `<a href="…#eq=…">` with dynamic baseline offset.
- * Dimensions are emitted in pt so Word keeps the 10pt face size; vertical-align
- * uses measured depth so the math axis lines up with body text.
+ * Word applies `span.MsoHyperlink { text-decoration:underline }` on paste.
+ * Override that character style in a head `<style>` (Office HTML idiom).
+ */
+const WORD_NO_UNDERLINE_STYLE = `<style><!--
+a:link, a:visited, span.MsoHyperlink, span.MsoHyperlinkFollowed {
+  color:windowtext; text-decoration:none; text-underline:none;
+}
+a img, span.MsoHyperlink img { border:none; text-decoration:none; }
+--></style>`;
+
+/**
+ * Word HTML → OOXML baseline shift.
+ * Early desktop Word tests only lowered the image when `vertical-align:-Xpt`
+ * lived on the `<a>` (not solely on `<img>`). `mso-text-raise` maps to
+ * `<w:position>` so Office consistently lowers the run.
+ */
+export function wordBaselineShiftStyle(depthPt: number): string {
+  if (!(depthPt > 0) || !Number.isFinite(depthPt)) return "";
+  const x = Number(depthPt.toFixed(2));
+  return `vertical-align:-${x}pt;mso-text-raise:-${x}pt;`;
+}
+
+/**
+ * SPEC: 4× PNG inside inline `<span><a href="#eq=…"><img></a></span>`.
+ * No `<p>` — pasting mid-sentence must not force a paragraph break.
+ *
+ * Baseline shift (measured depth → pt) is stamped on **span + a + img**,
+ * matching the early working `test.html` pattern where valign on `<a>`
+ * was required for Word to actually lower the picture.
+ *
+ * Display size: HTML width/height attrs in CSS px (10pt face) plus style pt,
+ * so Word keeps the correct size without eating the 4× bitmap pixels.
  */
 export function wrapPngForWord(latex: string, raster: RasterResult): string {
   const href = buildEqHref(latex).replace(/"/g, "&quot;");
@@ -123,20 +149,22 @@ export function wrapPngForWord(latex: string, raster: RasterResult): string {
   const heightPt = raster.heightPt > 0 ? raster.heightPt : Math.round(raster.cssHeight * 0.75 * 100) / 100;
   const widthPx = Math.max(1, Math.round(raster.cssWidth));
   const heightPx = Math.max(1, Math.round(raster.cssHeight));
-  const align =
-    raster.baselinePt > 0
-      ? `vertical-align:-${raster.baselinePt}pt;`
-      : "vertical-align:baseline;";
+  const shift = wordBaselineShiftStyle(raster.baselinePt);
+
   const imgStyle =
-    `width:${widthPt}pt;height:${heightPt}pt;${align}` +
+    `width:${widthPt}pt;height:${heightPt}pt;${shift}` +
     `${NO_LINK_DECORATION}display:inline;`;
   const img =
-    `<img src="${raster.dataUrl}" width="${widthPx}" height="${heightPx}" ` +
+    `<img border="0" src="${raster.dataUrl}" width="${widthPx}" height="${heightPx}" ` +
     `style="${imgStyle}" alt="equation" />`;
-  const anchorStyle = `${NO_LINK_DECORATION}color:windowtext;`;
+
+  const anchorStyle = `${shift}${NO_LINK_DECORATION}color:windowtext;`;
+  const spanStyle = `${shift}${NO_LINK_DECORATION}color:windowtext;`;
+
+  // Inline only — span wraps a so Word still has a character-run to raise.
   return (
-    `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>` +
-    `<a href="${href}" style="${anchorStyle}">${img}</a>` +
+    `<!DOCTYPE html><html><head><meta charset="utf-8">${WORD_NO_UNDERLINE_STYLE}</head><body>` +
+    `<span style="${spanStyle}"><a href="${href}" style="${anchorStyle}">${img}</a></span>` +
     `</body></html>`
   );
 }
@@ -155,24 +183,16 @@ export async function copyPng(
       throw new Error("PNG empty");
     }
     const html = wrapPngForWord(latex, raster);
-    // Prefer HTML (sized in pt + vertical-align + no underline) for Word.
-    // Raw image/png alone would paste at 4× bitmap pixels and float the baseline.
-    try {
-      await writeClipboardItems({
-        "text/html": new Blob([html], { type: "text/html" }),
-        "image/png": raster.blob,
-        "text/plain": new Blob([latex], { type: "text/plain" }),
-      });
-    } catch {
-      // Some hosts reject mixed image+html — still ship the Word HTML payload.
-      await writeClipboardItems({
-        "text/html": new Blob([html], { type: "text/html" }),
-        "text/plain": new Blob([latex], { type: "text/plain" }),
-      });
-    }
+    // HTML-only: a sibling image/png makes Word paste the raw 4× bitmap and
+    // ignore CF_HTML pt sizing + vertical-align / mso-text-raise (early test.html
+    // succeeded with text/html + text/plain only).
+    await writeClipboardItems({
+      "text/html": new Blob([html], { type: "text/html" }),
+      "text/plain": new Blob([latex], { type: "text/plain" }),
+    });
     return {
       format: "png",
-      message: `Copied: PNG (${scale}x, ${raster.width}×${raster.height}) + #eq=`,
+      message: `Copied: PNG (${scale}x, ${raster.width}×${raster.height}, shift -${raster.baselinePt}pt) + #eq=`,
       fallback: false,
     };
   } catch {
@@ -191,7 +211,6 @@ export async function copySvg(
   try {
     const { svg, blob } = await renderFormulaSvg(latex, scale);
     if (!svg.includes("<svg") || blob.size < 32) throw new Error("SVG empty");
-    // Browsers rarely accept image/svg+xml on clipboard; also offer text + html.
     const html = `<!DOCTYPE html><html><body>${svg}</body></html>`;
     await writeClipboardItems({
       "image/svg+xml": blob,
@@ -200,7 +219,6 @@ export async function copySvg(
     });
     return { format: "svg", message: "Copied: SVG", fallback: false };
   } catch {
-    // Some Chromium builds reject image/svg+xml — retry without that type.
     try {
       const { svg } = await renderFormulaSvg(latex, scale);
       const html = `<!DOCTYPE html><html><body>${svg}</body></html>`;

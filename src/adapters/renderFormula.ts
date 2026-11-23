@@ -21,9 +21,31 @@ export const DEFAULT_EXPORT_SCALE = 4;
 /** CSS px → pt at 96 DPI (SPEC: depthPx * 0.75 → vertical-align pt). */
 export const PX_TO_PT = 0.75;
 
+/**
+ * Word `vertical-align: -Xpt` clamps.
+ * ~7pt is a typical simple-formula depth at 10pt; tall stacks are capped so the
+ * image does not sink excessively below the body baseline.
+ */
+export const VALIGN_PT_MIN = 2;
+export const VALIGN_PT_MAX = 20;
+export const VALIGN_PT_REF = 7;
+
 /** Convert CSS px to pt, two decimal places (Word HTML inline styles). */
 export function pxToPt(px: number): number {
   return Math.round(Math.max(0, px) * PX_TO_PT * 100) / 100;
+}
+
+/**
+ * Map measured depth (CSS px) → Word vertical-align magnitude in pt.
+ * Returns 0 when depth is unknown / zero (caller may omit the negative offset).
+ */
+export function depthToValignPt(depthPx: number, heightPt = 0): number {
+  if (!(depthPx > 0) || !Number.isFinite(depthPx)) return 0;
+  const raw = pxToPt(depthPx);
+  const heightCap = heightPt > 0 ? Math.max(VALIGN_PT_REF, heightPt * 0.55) : VALIGN_PT_MAX;
+  const max = Math.min(VALIGN_PT_MAX, heightCap);
+  const clamped = Math.min(max, Math.max(VALIGN_PT_MIN, raw));
+  return Math.round(clamped * 100) / 100;
 }
 
 /** Always warm Termes (+ TNR intercept) so Times defaults stay cross-platform. */
@@ -54,9 +76,21 @@ export async function mountExportNode(latex: string): Promise<HTMLElement> {
   const mathFamily = fontStackFor(prefs.styles.variable.font) || MT_FONT_STACK;
   const host = document.createElement("div");
   host.setAttribute("data-mt-export-host", "1");
-  // Inline line box so formula + baseline strut share one baseline (Word depth).
-  host.style.cssText =
-    "position:fixed;left:-10000px;top:0;z-index:-1;pointer-events:none;background:transparent;white-space:nowrap;line-height:normal;font-size:0;";
+  // Inline line box at body 10pt so formula + baseline strut share one alphabetic
+  // baseline (Word `vertical-align: -depth`). Avoid font-size:0 — it collapses the
+  // strut and under-reports depth, which makes equations float above body text.
+  host.style.cssText = [
+    "position:fixed",
+    "left:-10000px",
+    "top:0",
+    "z-index:-1",
+    "pointer-events:none",
+    "background:transparent",
+    "white-space:nowrap",
+    "line-height:normal",
+    `font-family:${mathFamily}`,
+    `font-size:${EXPORT_FONT_PT}pt`,
+  ].join(";");
   const node = document.createElement("span");
   node.className = "mt-export-formula";
   // No padding — padding inflated Word display size and skewed depth.
@@ -78,11 +112,23 @@ export async function mountExportNode(latex: string): Promise<HTMLElement> {
     defaultMode: "math",
     letterShapeStyle: "tex",
   });
+  // 10pt reference glyph "x" on the same line — Word body baseline proxy.
+  // Depth = formula box bottom − reference bottom (fractions land ~5–8pt).
   const marker = document.createElement("span");
   marker.setAttribute("data-mt-baseline", "1");
-  marker.textContent = "\u200b";
-  marker.style.cssText =
-    "display:inline-block;width:0;height:0;overflow:hidden;vertical-align:baseline;font-size:0;line-height:0;";
+  marker.textContent = "x";
+  marker.style.cssText = [
+    "display:inline",
+    "padding:0",
+    "margin:0",
+    "border:0",
+    "vertical-align:baseline",
+    `font-family:${mathFamily}`,
+    `font-size:${EXPORT_FONT_PT}pt`,
+    "line-height:normal",
+    "color:transparent",
+    "user-select:none",
+  ].join(";");
   host.appendChild(node);
   host.appendChild(marker);
   document.body.appendChild(host);
@@ -95,15 +141,42 @@ export function unmountExportNode(node: HTMLElement): void {
 }
 
 /**
- * Depth below the math baseline in CSS px (formula box bottom − strut).
- * Used as Word `vertical-align: -Xpt` so the equals / math axis lines up
- * with surrounding body text.
+ * Depth below the body baseline in CSS px.
+ * Used as Word `vertical-align` / `mso-text-raise: -Xpt`.
+ *
+ * Sources (max of available):
+ * 1. MathLive `.ML__strut--bottom` TeX depth (em/px)
+ * 2. Formula box bottom − sibling 10pt reference `x` bottom
  */
 export function measureDepthPx(node: HTMLElement): number {
+  const fontPx = parseFloat(getComputedStyle(node).fontSize) || EXPORT_FONT_PT * (96 / 72);
+  let strutDepth = 0;
+  const mlStrut = node.querySelector(".ML__strut--bottom");
+  if (mlStrut instanceof HTMLElement) {
+    const va = mlStrut.style.verticalAlign || getComputedStyle(mlStrut).verticalAlign;
+    const em = /^(-?[\d.]+)em$/i.exec(va.trim());
+    if (em) {
+      const depthEm = Math.abs(parseFloat(em[1]));
+      if (Number.isFinite(depthEm) && depthEm > 0) strutDepth = depthEm * fontPx;
+    } else {
+      const px = /^(-?[\d.]+)px$/i.exec(va.trim());
+      if (px) {
+        const depth = Math.abs(parseFloat(px[1]));
+        if (Number.isFinite(depth) && depth > 0) strutDepth = depth;
+      }
+    }
+  }
+
+  let refDepth = 0;
   const marker = node.parentElement?.querySelector("[data-mt-baseline]");
-  if (!(marker instanceof HTMLElement)) return 0;
-  const depth = node.getBoundingClientRect().bottom - marker.getBoundingClientRect().bottom;
-  return Math.max(0, depth);
+  if (marker instanceof HTMLElement) {
+    refDepth = Math.max(
+      0,
+      node.getBoundingClientRect().bottom - marker.getBoundingClientRect().bottom,
+    );
+  }
+
+  return Math.max(strutDepth, refDepth);
 }
 
 export type RasterResult = {
@@ -118,7 +191,9 @@ export type RasterResult = {
   widthPt: number;
   heightPt: number;
   scale: number;
-  /** `vertical-align: -Xpt` magnitude (depth below baseline). */
+  /** Raw measured depth in CSS px (before clamp). */
+  depthPx: number;
+  /** `vertical-align: -Xpt` magnitude (depth below baseline, clamped). */
   baselinePt: number;
 };
 
@@ -133,6 +208,8 @@ export async function renderFormulaPng(
     // Prefer fractional px → pt for Word; keep integer px attrs for CF_HTML.
     const cssWidth = Math.max(1, rect.width);
     const cssHeight = Math.max(1, rect.height);
+    const widthPt = pxToPt(cssWidth);
+    const heightPt = pxToPt(cssHeight);
     const dataUrl = await toPng(node, {
       pixelRatio: scale,
       backgroundColor: "transparent",
@@ -148,10 +225,11 @@ export async function renderFormulaPng(
       height: img.naturalHeight,
       cssWidth,
       cssHeight,
-      widthPt: pxToPt(cssWidth),
-      heightPt: pxToPt(cssHeight),
+      widthPt,
+      heightPt,
       scale,
-      baselinePt: pxToPt(depthPx),
+      depthPx,
+      baselinePt: depthToValignPt(depthPx, heightPt),
     };
   } finally {
     unmountExportNode(node);
