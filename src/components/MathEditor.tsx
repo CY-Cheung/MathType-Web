@@ -85,6 +85,9 @@ export type { EditorSelection };
 export type MathEditorHandle = {
   insert: (latex: string, at?: EditorSelection | null) => void;
   capture: () => string;
+  /** Full field LaTeX (ignores selection) for clipboard export. */
+  captureLatex: () => string;
+  captureMathMl: () => string;
   captureSelection: () => EditorSelection;
   restoreSelection: (selection: EditorSelection | null) => void;
 };
@@ -146,6 +149,12 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
       if (!field) return "";
       if (!field.selectionIsCollapsed) return field.getValue(field.selection);
       return field.value;
+    },
+    captureLatex() {
+      return fieldRef.current?.getValue("latex") ?? "";
+    },
+    captureMathMl() {
+      return fieldRef.current?.getValue("math-ml") ?? "";
     },
     captureSelection() {
       const field = fieldRef.current;

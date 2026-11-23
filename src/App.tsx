@@ -1,18 +1,31 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { copyExport, type ExportFormat } from "./adapters/clipboard";
 import { MathEditor, type EditorSelection, type MathEditorHandle } from "./components/MathEditor";
+import { ExportMenu } from "./components/ExportMenu";
 import { FavoritesBar } from "./components/FavoritesBar";
 import { MatrixDialog } from "./components/MatrixDialog";
 import { Toolbar } from "./components/Toolbar";
 import { matrixToLatex, type MatrixSpec } from "./core/matrixTemplate";
-import { isMatrixDialogShortcut } from "./core/shortcuts";
+import { isExportShortcut, isMatrixDialogShortcut } from "./core/shortcuts";
 import { STATUS_BAR_LABEL } from "./types/preset";
+
+const TOAST_MS = 2400;
 
 export default function App() {
   const editorRef = useRef<MathEditorHandle>(null);
   const selectionRef = useRef<EditorSelection | null>(null);
   const matrixOpenRef = useRef(false);
+  const toastTimer = useRef<number | null>(null);
   const [chordStatus, setChordStatus] = useState("");
+  const [toast, setToast] = useState("");
+  const [exportBusy, setExportBusy] = useState(false);
   const [matrixOpen, setMatrixOpen] = useState(false);
+
+  const showToast = useCallback((message: string) => {
+    setToast(message);
+    if (toastTimer.current) window.clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(() => setToast(""), TOAST_MS);
+  }, []);
 
   const openMatrix = useCallback(() => {
     if (matrixOpenRef.current) return;
@@ -34,24 +47,72 @@ export default function App() {
     editorRef.current?.insert(matrixToLatex(spec), at);
   }, []);
 
+  const runExport = useCallback(
+    async (format: ExportFormat) => {
+      if (exportBusy || matrixOpenRef.current) return;
+      const latex = editorRef.current?.captureLatex() ?? "";
+      if (!latex.trim()) {
+        showToast("Nothing to copy");
+        return;
+      }
+      const selection = editorRef.current?.captureSelection() ?? null;
+      setExportBusy(true);
+      try {
+        const result = await copyExport(format, latex);
+        showToast(result.message);
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : "Copy failed");
+      } finally {
+        setExportBusy(false);
+        editorRef.current?.restoreSelection(selection);
+      }
+    },
+    [exportBusy, showToast],
+  );
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (!isMatrixDialogShortcut(event) || matrixOpenRef.current) return;
+      if (matrixOpenRef.current) return;
       const target = event.target;
       if (!(target instanceof Element)) return;
       if (target.closest("input, textarea, select, [role='dialog']")) return;
+
+      if (isExportShortcut(event)) {
+        event.preventDefault();
+        void runExport("mathml");
+        return;
+      }
+
+      if (!isMatrixDialogShortcut(event)) return;
       if (target.closest("math-field")) return;
       event.preventDefault();
       openMatrix();
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [openMatrix]);
+  }, [openMatrix, runExport]);
+
+  useEffect(
+    () => () => {
+      if (toastTimer.current) window.clearTimeout(toastTimer.current);
+    },
+    [],
+  );
+
+  const status = toast || chordStatus || STATUS_BAR_LABEL;
 
   return (
     <div className="flex h-dvh flex-col bg-[#d4d4d4] sm:p-4">
       <div className="flex min-h-0 flex-1 flex-col border border-[#b4b4b4] bg-white shadow-sm">
-        <Toolbar onInsert={(latex) => editorRef.current?.insert(latex)} onOpenMatrix={openMatrix} />
+        <div className="flex items-start justify-between gap-2 border-b border-[#b5b5b5] bg-[#e6e6e6] pr-1">
+          <div className="min-w-0 flex-1">
+            <Toolbar onInsert={(latex) => editorRef.current?.insert(latex)} onOpenMatrix={openMatrix} />
+          </div>
+          <div className="flex shrink-0 items-center gap-1 py-1.5">
+            <span className="hidden text-[10px] text-[#666] sm:inline">Ctrl+Shift+C</span>
+            <ExportMenu busy={exportBusy} onExport={(format) => void runExport(format)} />
+          </div>
+        </div>
         <FavoritesBar
           onInsert={(latex) => editorRef.current?.insert(latex)}
           onCapture={() => editorRef.current?.capture() ?? ""}
@@ -59,8 +120,16 @@ export default function App() {
         <main className="relative min-h-0 flex-1">
           <MathEditor ref={editorRef} onChordStatus={setChordStatus} onMatrixDialog={openMatrix} />
         </main>
-        <footer className="border-t border-[#c6c6c6] bg-[#f3f3f3] px-2 py-1.5 font-sans text-[12px] leading-snug text-[#1a1a1a]">
-          {chordStatus || STATUS_BAR_LABEL}
+        <footer className="relative border-t border-[#c6c6c6] bg-[#f3f3f3] px-2 py-1.5 font-sans text-[12px] leading-snug text-[#1a1a1a]">
+          {status}
+          {toast ? (
+            <span
+              className="pointer-events-none absolute bottom-full right-2 mb-1 rounded-sm border border-[#8d8d8d] bg-[#fffef6] px-2 py-1 text-[11px] text-[#222] shadow-sm"
+              role="status"
+            >
+              {toast}
+            </span>
+          ) : null}
         </footer>
       </div>
       {matrixOpen ? <MatrixDialog onCancel={closeMatrix} onConfirm={confirmMatrix} /> : null}

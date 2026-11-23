@@ -150,7 +150,7 @@ export function Toolbar({ onInsert, onOpenMatrix }: ToolbarProps) {
   return (
     <div
       ref={rootRef}
-      className="shrink-0 border-b border-[#b5b5b5] bg-[#e6e6e6] px-1 py-0.5 text-[#222]"
+      className="shrink-0 bg-transparent px-1 py-0.5 text-[#222]"
     >
       {row(symbolPalettes)}
       {row(templatePalettes)}
