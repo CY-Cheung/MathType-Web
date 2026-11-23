@@ -55,20 +55,25 @@ export const DEFINE_STYLE_ORDER: readonly DefineStyleMeta[] = [
   { id: "user2", label: "User 2" },
 ] as const;
 
-/** Common faces offered in the Font dropdown (custom names still allowed). */
+/** Common faces offered in the Font `<select>` (Custom… for free-form names). */
 export const COMMON_FONT_PRESETS: readonly string[] = [
   "Times New Roman",
   "TeX Gyre Termes",
-  "Courier New",
   "PMingLiU",
+  "MingLiU",
   "新細明體",
   "Symbol",
-  "Segoe UI Symbol",
-  "Cambria Math",
   "MT Extra",
+  "Courier New",
   "Arial",
+  "Calibri",
+  "Cambria Math",
+  "Segoe UI Symbol",
   "Georgia",
 ] as const;
+
+/** Sentinel value for the Custom… option in Font `<select>`. */
+export const CUSTOM_FONT_OPTION = "__custom__";
 
 function face(font: string, bold = false, italic = false): StyleFace {
   return { font, bold, italic };

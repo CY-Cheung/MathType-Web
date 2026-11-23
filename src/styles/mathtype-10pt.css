@@ -112,3 +112,9 @@ math-field::part(virtual-keyboard-toggle),
 .ML__menu-toggle {
   display: none !important;
 }
+
+/* Host-level fallback for IME composition wash (shadow CSS also clears this). */
+math-field.mt-math-field {
+  --composition-background-color: transparent;
+  --composition-underline-color: transparent;
+}
