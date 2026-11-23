@@ -140,3 +140,11 @@ export function isMatrixDialogShortcut(event: KeyboardEvent): boolean {
   if (event.repeat || event.altKey || event.metaKey || event.shiftKey || !event.ctrlKey) return false;
   return event.code === "KeyM";
 }
+
+/** Default clipboard export (MathML). Leaves Ctrl+C for MathLive's own copy. */
+export const EXPORT_SHORTCUT = "Ctrl+Shift+C";
+
+export function isExportShortcut(event: KeyboardEvent): boolean {
+  if (event.repeat || event.altKey || event.metaKey || !event.ctrlKey || !event.shiftKey) return false;
+  return event.code === "KeyC";
+}

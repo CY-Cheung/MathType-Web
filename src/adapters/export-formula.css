@@ -1,0 +1,13 @@
+/* Off-screen export host: 10pt Times, transparent — mirrors MathMarkup fonts. */
+.mt-export-formula .ML__base,
+.mt-export-formula .ML__mathit,
+.mt-export-formula .ML__mathbf,
+.mt-export-formula .ML__cmr,
+.mt-export-formula .ML__text {
+  font-family: "Times New Roman", "Liberation Serif", Times, serif !important;
+}
+
+.mt-export-formula .ML__mathit,
+.mt-export-formula .ML__mathbfit {
+  font-style: italic;
+}
