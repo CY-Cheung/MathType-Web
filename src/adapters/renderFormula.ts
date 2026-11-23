@@ -1,7 +1,7 @@
 import { convertLatexToMarkup } from "mathlive";
 import { toPng, toSvg } from "html-to-image";
 import "mathlive/static.css";
-import "../styles/tex-gyre-termes.css";
+import { ensureTexGyreTermesFonts } from "../styles/tex-gyre-termes";
 import "./export-formula.css";
 import { MT_FONT_LOAD_SPECS, MT_FONT_STACK } from "../styles/fontStack";
 import { defaultStylePreset } from "../types/preset";
@@ -27,6 +27,7 @@ const EXPORT_FONT_LOAD_SPECS = [
 
 async function waitForFonts(): Promise<void> {
   if (typeof document === "undefined" || !document.fonts) return;
+  ensureTexGyreTermesFonts();
   await document.fonts.ready;
   await Promise.all(
     EXPORT_FONT_LOAD_SPECS.map((spec) =>

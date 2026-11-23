@@ -3,6 +3,8 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
 export default defineConfig({
+  // GitHub Pages project site: https://<user>.github.io/MathType-Web/
+  base: "/MathType-Web/",
   plugins: [react(), tailwindcss()],
   server: {
     host: "0.0.0.0",
