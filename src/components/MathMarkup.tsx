@@ -12,6 +12,22 @@ function iconLatex(latex: string): string {
   );
   if (operator) return `\\${operator[1]}`;
 
+  // Keep outer `\left` / `\right` (including single-sided `\left.` / `\right.`)
+  // so toolbar icons show one-sided fences instead of a bare matrix.
+  if (latex.includes("\\left") || latex.includes("\\right")) {
+    let preview = latex;
+    if (latex.includes("\\begin{")) {
+      const rows = latex.split("\\\\").length;
+      const cols = (latex.split("\\\\")[0]?.match(/&/g)?.length ?? 0) + 1;
+      const row = Array.from({ length: cols }, () => "\\cdot").join("&");
+      const body = Array.from({ length: rows }, () => row).join("\\\\");
+      preview = latex.replace(
+        /\\begin\{[^}]+\}[\s\S]*?\\end\{[^}]+\}/,
+        `\\begin{smallmatrix}${body}\\end{smallmatrix}`,
+      );
+    }
+    return preview.replaceAll("#@", "\\mkern1mu").replaceAll("#?", "\\mkern1mu");
+  }
   if (latex.includes("\\begin{")) {
     const rows = latex.split("\\\\").length;
     const cols = (latex.split("\\\\")[0]?.match(/&/g)?.length ?? 0) + 1;
@@ -26,9 +42,6 @@ function iconLatex(latex: string): string {
   if (latex === "^{#@}") return "x^{n}";
   if (latex === "_{#@}") return "x_{n}";
   if (latex === "_{#@}^{#?}") return "x_{n}^{m}";
-  if (latex.includes("\\left")) {
-    return latex.replaceAll("#@", "\\mkern1mu").replaceAll("#?", "\\mkern1mu");
-  }
   return latex.replaceAll("#@", "x").replaceAll("#?", "");
 }
 

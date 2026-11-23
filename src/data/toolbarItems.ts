@@ -192,6 +192,14 @@ export const templatePalettes: ToolbarPalette[] = [
       item("brackets", "[ ]", "\\left[#@\\right]", "Brackets", "Ctrl+["),
       item("braces", "{ }", "\\left\\{#@\\right\\}", "Braces", "Ctrl+Shift+["),
       item("abs", "| |", "\\left|#@\\right|", "Absolute value", "Alt+T, |"),
+      // Single-sided / one-fence (MathType left-only / right-only). `\right.` /
+      // `\left.` keep the open side stretchy without inventing a matching glyph.
+      item("paren-left", "( .", "\\left(#@\\right.", "Left parenthesis only"),
+      item("paren-right", ". )", "\\left.#@\\right)", "Right parenthesis only"),
+      item("bracket-left", "[ .", "\\left[#@\\right.", "Left bracket only"),
+      item("bracket-right", ". ]", "\\left.#@\\right]", "Right bracket only"),
+      item("brace-left", "{ .", "\\left\\{#@\\right.", "Left brace only"),
+      item("brace-right", ". }", "\\left.#@\\right\\}", "Right brace only"),
     ],
   },
   {
@@ -284,6 +292,25 @@ export const templatePalettes: ToolbarPalette[] = [
         "3×3",
         "\\begin{pmatrix}#?&#?&#?\\\\#?&#?&#?\\\\#?&#?&#?\\end{pmatrix}",
         "3 by 3 matrix",
+      ),
+      // Piecewise / system: left brace only around a multi-row array.
+      item(
+        "cases-left-2",
+        "{ 2",
+        "\\left\\{\\begin{array}{ll}#?&#?\\\\#?&#?\\end{array}\\right.",
+        "Left brace · 2-row piecewise",
+      ),
+      item(
+        "cases-left-3",
+        "{ 3",
+        "\\left\\{\\begin{array}{ll}#?&#?\\\\#?&#?\\\\#?&#?\\end{array}\\right.",
+        "Left brace · 3-row piecewise",
+      ),
+      item(
+        "cases-right-2",
+        "2 }",
+        "\\left.\\begin{array}{ll}#?&#?\\\\#?&#?\\end{array}\\right\\}",
+        "Right brace · 2-row piecewise",
       ),
     ],
   },

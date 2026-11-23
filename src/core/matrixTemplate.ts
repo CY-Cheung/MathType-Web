@@ -13,7 +13,22 @@ export const MAX_MATRIX_SIZE = 10;
 export type LineStyle = "none" | "solid" | "dashed";
 export type ColumnAlign = "left" | "center" | "right";
 export type RowAlign = "top" | "baseline" | "bottom";
-export type MatrixFence = "none" | "paren" | "bracket" | "brace" | "bar";
+/**
+ * Matrix / piecewise fences. `*Left` / `*Right` use LaTeX `\left.` / `\right.`
+ * so MathLive keeps a single stretchy delimiter (not auto-paired into both sides).
+ */
+export type MatrixFence =
+  | "none"
+  | "paren"
+  | "parenLeft"
+  | "parenRight"
+  | "bracket"
+  | "bracketLeft"
+  | "bracketRight"
+  | "brace"
+  | "braceLeft"
+  | "braceRight"
+  | "bar";
 
 export type MatrixSpec = {
   rows: number;
@@ -33,8 +48,14 @@ const RULE: Record<LineStyle, string> = { none: "", solid: "|", dashed: ":" };
 const FENCE: Record<MatrixFence, readonly [string, string] | null> = {
   none: null,
   paren: ["\\left(", "\\right)"],
+  parenLeft: ["\\left(", "\\right."],
+  parenRight: ["\\left.", "\\right)"],
   bracket: ["\\left[", "\\right]"],
+  bracketLeft: ["\\left[", "\\right."],
+  bracketRight: ["\\left.", "\\right]"],
   brace: ["\\left\\{", "\\right\\}"],
+  braceLeft: ["\\left\\{", "\\right."],
+  braceRight: ["\\left.", "\\right\\}"],
   bar: ["\\left|", "\\right|"],
 };
 
