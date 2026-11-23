@@ -3,9 +3,10 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
-import "./styles/tex-gyre-termes.css";
+import { ensureTexGyreTermesFonts } from "./styles/tex-gyre-termes";
 import "./styles/mathtype-10pt.css";
 
+ensureTexGyreTermesFonts();
 MathfieldElement.fontsDirectory = `${import.meta.env.BASE_URL}vendor/mathlive/fonts`;
 MathfieldElement.soundsDirectory = null;
 
