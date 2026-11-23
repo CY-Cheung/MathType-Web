@@ -117,4 +117,5 @@ math-field::part(virtual-keyboard-toggle),
 math-field.mt-math-field {
   --composition-background-color: transparent;
   --composition-underline-color: transparent;
+  --composition-text-color: #000;
 }
