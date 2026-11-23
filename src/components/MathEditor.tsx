@@ -37,7 +37,8 @@ ${buildDefineStylesMappedCss("")}
   -webkit-text-fill-color: transparent;
   border: 1px dashed #008000;
 }
-.ML__virtual-keyboard-toggle,
+/* Keep the MathLive chrome menu off (menuItems = []); leave the
+   virtual-keyboard toggle visible so mobile users can dismiss / reopen. */
 .ML__menu-toggle {
   display: none !important;
 }
@@ -107,7 +108,9 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
 
     const configure = () => {
       if (cancelled || fieldRef.current !== field) return;
-      field.mathVirtualKeyboardPolicy = "manual";
+      // "auto": MathLive shows its virtual keyboard on touch focusin.
+      // "manual" + CSS display:none was blocking mobile keyboards entirely.
+      field.mathVirtualKeyboardPolicy = "auto";
       field.menuItems = [];
       field.letterShapeStyle = "tex";
       field.defaultMode = "math";
@@ -124,10 +127,25 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
       observer.observe(root, { childList: true, subtree: true, characterData: true });
     };
 
+    /** Ensure focus + VK show stay inside the user gesture (some WebViews). */
+    const onPointerUp = (event: PointerEvent) => {
+      if (event.pointerType !== "touch" && event.pointerType !== "pen") return;
+      if (cancelled || fieldRef.current !== field) return;
+      if (!field.isConnected) return;
+      field.focus();
+      try {
+        window.mathVirtualKeyboard?.show({ animate: true });
+      } catch {
+        /* MathLive may not have attached yet; policy=auto still covers focusin. */
+      }
+    };
+
     configure();
+    field.addEventListener("pointerup", onPointerUp);
     return () => {
       cancelled = true;
       observer?.disconnect();
+      field.removeEventListener("pointerup", onPointerUp);
     };
   }, [stylesEpoch]);
 
@@ -176,7 +194,7 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
       ref={fieldRef}
       className="mt-math-field"
       aria-label="Math editor"
-      math-virtual-keyboard-policy="manual"
+      math-virtual-keyboard-policy="auto"
       style={{
         fontFamily: `var(--mt-ds-variable-font, ${MT_FONT_STACK})`,
         fontSize: viewSize,
