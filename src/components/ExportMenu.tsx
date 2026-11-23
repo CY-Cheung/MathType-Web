@@ -13,7 +13,7 @@ function keepFocus(event: { preventDefault: () => void }): void {
 
 const OPTIONS: { format: ExportFormat; label: string; hint: string }[] = [
   { format: "mathml", label: "MathML", hint: "Word native equation" },
-  { format: "png", label: "PNG (3×)", hint: "Transparent · PowerPoint / Canva" },
+  { format: "png", label: "PNG (4×)", hint: "Transparent · #eq= round-trip · Word" },
   { format: "svg", label: "SVG", hint: "Vector · no jaggies" },
   { format: "latex", label: "LaTeX", hint: "Plain text · fallback" },
 ];
