@@ -34,6 +34,7 @@ import {
   type StylePreset,
 } from "../types/preset";
 import { MT_FONT_STACK } from "../styles/fontStack";
+import { buildLetterFaceForceCss } from "../styles/letterFaces.css";
 
 const SHADOW_STYLE_ID = "mt-10pt-shadow";
 
@@ -70,6 +71,7 @@ export const MATHFIELD_SHADOW_CSS = `
   text-decoration: none !important;
 }
 ${buildDefineStylesMappedCss("")}
+${buildLetterFaceForceCss("")}
 /* Matrix air for \\dfrac cells (Define Spacing CSS vars). */
 .ML__mtable .ML__arraycolsep {
   width: calc(var(--mt-matrix-col-gap, 1.2em) * 0.4) !important;
@@ -121,6 +123,10 @@ function applyShadowStyle(field: MathfieldElement): void {
     root.appendChild(style);
   }
   style.textContent = MATHFIELD_SHADOW_CSS;
+  // Keep our sheet last in the shadow tree so MathLive's KaTeX_Math defaults lose.
+  if (style.parentNode === root && root.lastChild !== style) {
+    root.appendChild(style);
+  }
 }
 
 /** MathLive's contenteditable sink that owns keyboard focus (Shadow DOM). */

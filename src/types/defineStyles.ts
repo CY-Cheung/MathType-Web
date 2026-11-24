@@ -87,8 +87,9 @@ export const FACTORY_DEFINE_STYLES: Record<DefineStyleId, StyleFace> = {
   textFe: face("PMingLiU"),
   function: face("Times New Roman"),
   variable: face("Times New Roman", false, true),
-  lcGreek: face("Symbol", false, true),
-  ucGreek: face("Symbol", false, true),
+  // Unicode Greek in MathLive (\\theta, \\alpha) — not Symbol-encoded MathType slots.
+  lcGreek: face("Times New Roman", false, true),
+  ucGreek: face("Times New Roman", false, true),
   symbol: face("Symbol"),
   vectorMatrix: face("Times New Roman", true, false),
   number: face("Times New Roman"),
@@ -113,13 +114,13 @@ export function fontStackFor(font: string): string {
   const lower = name.toLowerCase();
   // Windows: local TNR; Android / missing TNR → self-hosted STIX Two Text.
   if (lower === "times new roman") {
-    return `"Times New Roman", "STIX Two Text", "STIX Two Math", serif`;
+    return `"Times New Roman", "STIX Two Text", serif`;
   }
   if (lower === "stix two text") {
-    return `"STIX Two Text", "Times New Roman", "STIX Two Math", serif`;
+    return `"STIX Two Text", "Times New Roman", serif`;
   }
   if (lower === "tex gyre termes") {
-    return `"TeX Gyre Termes", "Times New Roman", "STIX Two Text", "STIX Two Math", serif`;
+    return `"TeX Gyre Termes", "Times New Roman", "STIX Two Text", serif`;
   }
   if (lower === "stix two math") {
     return `"STIX Two Math", "STIX Two Text", "Times New Roman", serif`;
@@ -131,13 +132,24 @@ export function fontStackFor(font: string): string {
     return `"${name}", "PMingLiU", "新細明體", MingLiU, "Noto Serif TC", serif`;
   }
   if (lower === "symbol" || lower.includes("symbol")) {
-    // Prefer STIX Two for unicode greek/operators when Symbol is absent.
-    return `"${name}", Symbol, "STIX Two Text", "STIX Two Math", "Segoe UI Symbol", "Cambria Math", serif`;
+    // MathLive emits Unicode Greek — Symbol encoding does not apply. Lead with
+    // TNR/STIX so .lcGreek never paints as a CM-looking system fallback.
+    return `"Times New Roman", "STIX Two Text", "${name}", Symbol, "Segoe UI Symbol", serif`;
   }
   if (lower === "mt extra" || lower.includes("extra")) {
     return `"${name}", "MT Extra", "STIX Two Math", "Segoe UI Symbol", Symbol, serif`;
   }
   return `"${name}", "Times New Roman", "STIX Two Text", serif`;
+}
+
+/** MathLive uses Unicode Greek — migrate legacy Symbol face to TNR. */
+function migrateUnicodeGreekFace(id: DefineStyleId, face: StyleFace): StyleFace {
+  if (id !== "lcGreek" && id !== "ucGreek") return face;
+  const lower = face.font.trim().toLowerCase();
+  if (lower === "symbol" || lower.includes("symbol tiger") || lower === "symbol tiger") {
+    return { ...face, font: "Times New Roman" };
+  }
+  return face;
 }
 
 export function cssWeight(bold: boolean): string {
@@ -207,9 +219,12 @@ export function normalizeDefineStylesPrefs(raw: unknown): DefineStylesPrefs {
   const styles = cloneStyles(FACTORY_DEFINE_STYLES);
   if (data.styles && typeof data.styles === "object") {
     for (const id of STYLE_IDS) {
-      styles[id] = normalizeFace(
-        (data.styles as Record<string, unknown>)[id],
-        FACTORY_DEFINE_STYLES[id],
+      styles[id] = migrateUnicodeGreekFace(
+        id,
+        normalizeFace(
+          (data.styles as Record<string, unknown>)[id],
+          FACTORY_DEFINE_STYLES[id],
+        ),
       );
     }
   }
@@ -451,7 +466,7 @@ ${p}.lcGreek.ML__mathbf,
 ${p}.mt-ds-lcGreek,
 ${p}.mt-ds-lcGreek .ML__mathit,
 ${p}.mt-ds-lcGreek .ML__cmr {
-  font-family: var(--mt-ds-lcGreek-font, Symbol, serif) !important;
+  font-family: var(--mt-ds-lcGreek-font, var(--mt-ds-variable-font, "Times New Roman", "STIX Two Text", serif)) !important;
   font-weight: var(--mt-ds-lcGreek-weight, 400) !important;
   font-style: var(--mt-ds-lcGreek-style, italic) !important;
 }
@@ -459,7 +474,7 @@ ${p}.mt-ds-ucGreek,
 ${p}.mt-ds-ucGreek .ML__mathit,
 ${p}.mt-ds-ucGreek .ML__cmr,
 ${p}.mt-ds-ucGreek .ML__mathbf {
-  font-family: var(--mt-ds-ucGreek-font, Symbol, serif) !important;
+  font-family: var(--mt-ds-ucGreek-font, var(--mt-ds-variable-font, "Times New Roman", "STIX Two Text", serif)) !important;
   font-weight: var(--mt-ds-ucGreek-weight, 400) !important;
   font-style: var(--mt-ds-ucGreek-style, italic) !important;
 }

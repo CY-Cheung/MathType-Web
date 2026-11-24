@@ -61,7 +61,12 @@
 
 .mt-markup .lcGreek,
 .mt-markup .lcGreek.ML__mathit {
-  font-family: var(--mt-ds-lcGreek-font, Symbol, serif) !important;
+  font-family: var(--mt-ds-lcGreek-font, var(--mt-ds-variable-font, "Times New Roman", "STIX Two Text", serif)) !important;
   font-weight: var(--mt-ds-lcGreek-weight, 400) !important;
   font-style: var(--mt-ds-lcGreek-style, italic) !important;
+}
+
+.mt-markup .ML__mathit,
+.mt-markup .ML__mathbfit {
+  font-family: var(--mt-ds-variable-font, "Times New Roman", "STIX Two Text", serif) !important;
 }
