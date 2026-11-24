@@ -70,7 +70,7 @@ export const FAVORITE_TABS: FavoriteTab[] = [
     items: [
       entry("mat-det", "\\det(A)"),
       entry("mat-inv", "A^{-1}"),
-      entry("mat-2", "\\begin{pmatrix}a&b\\\\c&d\\end{pmatrix}"),
+      entry("mat-2", "\\begin{pmatrix}a&b\\\\[0.85em]c&d\\end{pmatrix}"),
       entry("mat-vec", "\\vec{v}"),
     ],
   },

@@ -95,5 +95,15 @@
   padding-top: var(--mt-den-gap, 0.1em);
 }
 .mt-export-formula .ML__array {
-  border-spacing: var(--mt-matrix-col-gap, 0.5em) var(--mt-matrix-row-gap, 0.5em);
+  border-spacing: var(--mt-matrix-col-gap, 1.2em) var(--mt-matrix-row-gap, 1em);
+}
+.mt-export-formula .ML__mtable .ML__arraycolsep {
+  width: calc(var(--mt-matrix-col-gap, 1.2em) * 0.4) !important;
+  min-width: calc(var(--mt-matrix-col-gap, 1.2em) * 0.4) !important;
+}
+.mt-export-formula .ML__mtable .col-align-c,
+.mt-export-formula .ML__mtable .col-align-l,
+.mt-export-formula .ML__mtable .col-align-r {
+  padding-top: calc(var(--mt-matrix-row-gap, 1em) * 0.28);
+  padding-bottom: calc(var(--mt-matrix-row-gap, 1em) * 0.28);
 }

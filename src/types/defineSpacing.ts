@@ -2,7 +2,8 @@
  * MathType-style Define Spacing prefs (line / fraction / matrix gaps).
  */
 
-export const DEFINE_SPACING_STORAGE_KEY = "mt.defineSpacing.v1";
+/** v2 — roomier matrix gaps so `\dfrac` cells do not collide. */
+export const DEFINE_SPACING_STORAGE_KEY = "mt.defineSpacing.v2";
 
 export type DefineSpacingPrefs = {
   version: 1;
@@ -19,8 +20,8 @@ export const FACTORY_DEFINE_SPACING: DefineSpacingPrefs = {
   lineSpacingEm: 1.2,
   numeratorGapEm: 0.1,
   denominatorGapEm: 0.1,
-  matrixRowGapEm: 0.5,
-  matrixColGapEm: 0.5,
+  matrixRowGapEm: 1.0,
+  matrixColGapEm: 1.2,
 };
 
 export const DEFAULT_DEFINE_SPACING: DefineSpacingPrefs = {

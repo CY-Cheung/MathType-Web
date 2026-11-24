@@ -14,6 +14,10 @@ import {
   restoreInsertionStyleOnly,
 } from "./activeStyleApply";
 import { adaptInsertTemplate, isScriptInsertTemplate } from "./insertTemplate";
+import {
+  adaptFracTemplateForMatrix,
+  isCaretInMatrixEnvironment,
+} from "./matrixFrac";
 import { toMathliveTemplate } from "./shortcuts";
 
 export type InsertAdaptedOptions = {
@@ -56,7 +60,11 @@ export function insertAdaptedLatex(
       return;
     }
 
-    const adapted = adaptInsertTemplate(raw, hadSelection);
+    const forMatrix = adaptFracTemplateForMatrix(
+      raw,
+      isCaretInMatrixEnvironment(field),
+    );
+    const adapted = adaptInsertTemplate(forMatrix, hadSelection);
     field.executeCommand(["insert", adapted]);
     if (isScriptInsertTemplate(adapted)) {
       // Script inserts leave `\placeholder{}` selected — insertion-only restore

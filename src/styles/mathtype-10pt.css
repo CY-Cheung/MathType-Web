@@ -37,8 +37,8 @@
   --mt-line-spacing: 1.2;
   --mt-num-gap: 0.1em;
   --mt-den-gap: 0.1em;
-  --mt-matrix-row-gap: 0.5em;
-  --mt-matrix-col-gap: 0.5em;
+  --mt-matrix-row-gap: 1em;
+  --mt-matrix-col-gap: 1.2em;
   --text-font-family: var(--mt-text-font);
   color-scheme: light;
 }
@@ -81,6 +81,21 @@ math-field.mt-math-field .ML__mfrac > span:last-child,
 math-field.mt-math-field .ML__array,
 .mt-export-formula .ML__array {
   border-spacing: var(--mt-matrix-col-gap) var(--mt-matrix-row-gap);
+}
+/* MathLive matrices use `.ML__mtable` + `.ML__arraycolsep` (not HTML tables). */
+math-field.mt-math-field .ML__mtable .ML__arraycolsep,
+.mt-export-formula .ML__mtable .ML__arraycolsep {
+  width: calc(var(--mt-matrix-col-gap, 1.2em) * 0.4) !important;
+  min-width: calc(var(--mt-matrix-col-gap, 1.2em) * 0.4) !important;
+}
+math-field.mt-math-field .ML__mtable .col-align-c,
+math-field.mt-math-field .ML__mtable .col-align-l,
+math-field.mt-math-field .ML__mtable .col-align-r,
+.mt-export-formula .ML__mtable .col-align-c,
+.mt-export-formula .ML__mtable .col-align-l,
+.mt-export-formula .ML__mtable .col-align-r {
+  padding-top: calc(var(--mt-matrix-row-gap, 1em) * 0.28);
+  padding-bottom: calc(var(--mt-matrix-row-gap, 1em) * 0.28);
 }
 
 @media (min-width: 640px) {

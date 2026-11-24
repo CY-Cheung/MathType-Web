@@ -110,7 +110,10 @@ function columnSpec(spec: MatrixSpec): string {
 /** Thin rule. 0.08em is about 2px at the 200% editor zoom. */
 const RULE_THICKNESS = "0.08em";
 const RULE_RAISE = "-0.68em";
-const RULE_ROW_GAP = "0.65em";
+/** Extra skip under partition rules — room for `\dfrac` numerators. */
+const RULE_ROW_GAP = "0.85em";
+/** Row skip without rules so full-size fractions do not collide. */
+const PLAIN_ROW_GAP = "0.85em";
 /** From the right edge of an empty slot back past its left edge. */
 const SLOT_BACK = "-0.72em";
 /** Distance between the left edges of neighboring empty-slot columns. */
@@ -186,7 +189,11 @@ export function matrixToLatex(spec: MatrixSpec): string {
   for (let row = 0; row < spec.rows; row += 1) {
     const below = row < spec.rows - 1 ? spec.horizontalLines[row] : undefined;
     rows.push(rowLatex(below, spec.columns));
-    if (row < spec.rows - 1) breaks.push(below && below !== "none" ? `\\\\[${RULE_ROW_GAP}]` : "\\\\");
+    if (row < spec.rows - 1) {
+      breaks.push(
+        below && below !== "none" ? `\\\\[${RULE_ROW_GAP}]` : `\\\\[${PLAIN_ROW_GAP}]`,
+      );
+    }
   }
   const array = `\\begin{array}{${columnSpec(spec)}}${rows.map((row, index) => (index === 0 ? row : `${breaks[index - 1]}${row}`)).join("")}\\end{array}`;
   return raiseLatex(fenceLatex(spec.fence, array, spec.rows), spec.rowAlign);
