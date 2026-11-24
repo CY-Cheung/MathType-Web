@@ -17,6 +17,10 @@ import {
   isTextStyleShortcut,
   toMathliveTemplate,
 } from "../core/shortcuts";
+import {
+  insertMathLineBreak,
+  shouldIgnoreEnterForIme,
+} from "../core/enterLineBreak";
 import { useMathShortcuts } from "../core/useMathShortcuts";
 import {
   DEFAULT_ACTIVE_STYLE,
@@ -65,6 +69,33 @@ export const MATHFIELD_SHADOW_CSS = `
   text-decoration: none !important;
 }
 ${buildDefineStylesMappedCss("")}
+/* Matrix air (Define Spacing CSS vars on :host / :root). */
+.ML__mtable .ML__arraycolsep {
+  width: calc(var(--mt-matrix-col-gap, 1.2em) * 0.4) !important;
+  min-width: calc(var(--mt-matrix-col-gap, 1.2em) * 0.4) !important;
+}
+.ML__mtable .col-align-c,
+.ML__mtable .col-align-l,
+.ML__mtable .col-align-r {
+  padding-top: calc(var(--mt-matrix-row-gap, 1em) * 0.28);
+  padding-bottom: calc(var(--mt-matrix-row-gap, 1em) * 0.28);
+}
+/* Em hairlines — drop MathLive max(1px, 0.04em) floor inside the field. */
+.ML__frac-line {
+  min-height: 0 !important;
+}
+.ML__frac-line:after {
+  min-height: var(--frac-line-thickness, 0.04em) !important;
+  margin-top: var(--frac-line-margin, -0.04em) !important;
+}
+.ML__sqrt-line {
+  height: 0.04em !important;
+  min-height: 0 !important;
+}
+.ML__sqrt-line:before {
+  min-height: 0.04em !important;
+  margin-top: -0.04em !important;
+}
 /* MathLive 0.111 draws \\placeholder{} as U+25A2 on span.ML__cmr. */
 .mt-empty-slot {
   display: inline-block;
@@ -406,6 +437,37 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
       field.removeEventListener("keydown", onKeyDown, true);
     };
   }, [onActiveStyleChange]);
+
+  // Enter → new row. Window capture + composedPath so we see sink keydowns
+  // inside the open shadow root (host-only capture can miss them).
+  useEffect(() => {
+    const onEnter = (event: KeyboardEvent) => {
+      if (event.key !== "Enter" && event.key !== "Return") return;
+      if (event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return;
+      if (shouldIgnoreEnterForIme(event)) return;
+
+      const field = fieldRef.current;
+      if (!field) return;
+      const path = typeof event.composedPath === "function" ? event.composedPath() : [];
+      if (!path.includes(field)) return;
+
+      const target = event.target;
+      if (
+        target instanceof Element &&
+        target.closest("input, textarea, select, [role='dialog']")
+      ) {
+        return;
+      }
+
+      commitPendingComposition(field);
+      if (insertMathLineBreak(field)) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
+    window.addEventListener("keydown", onEnter, true);
+    return () => window.removeEventListener("keydown", onEnter, true);
+  }, []);
 
   useEffect(() => {
     onChordStatus?.(chordStatus);

@@ -74,7 +74,12 @@ export default function App() {
   const { prefs: sizePrefs, commit: commitSizes, presetFields } = useDefineSizes();
   const { prefs: spacingPrefs, commit: commitSpacing } = useDefineSpacing();
   const { zoomPercent, setZoomPercent } = useWorkspaceZoom();
-  const { plainImageNoLink, setPlainImageNoLink } = useExportPrefs();
+  const {
+    plainImageNoLink,
+    setPlainImageNoLink,
+    exportScale,
+    setExportScale,
+  } = useExportPrefs();
   const viewportHeight = useVisualViewportLock();
 
   const dialogOpen =
@@ -153,6 +158,7 @@ export default function App() {
           (
             await copyExport(format, latex, {
               plainImageNoLink,
+              exportScale,
             })
           ).message,
         );
@@ -163,7 +169,15 @@ export default function App() {
         editorRef.current?.restoreSelection(selection);
       }
     },
-    [exportBusy, plainImageNoLink, showToast],
+    [exportBusy, exportScale, plainImageNoLink, showToast],
+  );
+
+  const changeExportScale = useCallback(
+    (scale: typeof exportScale) => {
+      const next = setExportScale(scale);
+      showToast(`PNG export: ${next}× (${next * 96} DPI)`);
+    },
+    [setExportScale, showToast],
   );
 
   const togglePlainImageNoLink = useCallback(() => {
@@ -289,7 +303,9 @@ export default function App() {
       <ExportMenu
         busy={exportBusy}
         plainImageNoLink={plainImageNoLink}
+        exportScale={exportScale}
         onPlainImageNoLinkChange={togglePlainImageNoLink}
+        onExportScaleChange={changeExportScale}
         onExport={(format) => void runExport(format)}
       />
     </>

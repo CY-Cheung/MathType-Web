@@ -193,7 +193,7 @@ async function refreshEqMedia(zip: JSZip, relsXml: string, latex: string): Promi
     relsDoc.getElementsByTagName("Relationship"),
   ]).filter((n) => (n.getAttribute("Type") ?? "").includes("/image"));
   if (imageRels.length === 0) return;
-  const png = await renderFormulaPng(latex, 4);
+  const png = await renderFormulaPng(latex);
   const target = imageRels[0]?.getAttribute("Target");
   if (!target) return;
   const path = target.startsWith("/") ? target.slice(1) : `word/${target.replace(/^\.\.\//, "")}`;

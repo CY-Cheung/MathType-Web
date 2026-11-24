@@ -67,21 +67,72 @@
 .mt-export-formula .lcGreek,
 .mt-export-formula .lcGreek.ML__mathit,
 .mt-export-formula .lcGreek.ML__mathbf,
+.mt-export-formula .lcGreek .ML__mathit,
+.mt-export-formula .lcGreek .ML__cmr,
 .mt-export-formula .mt-ds-lcGreek,
 .mt-export-formula .mt-ds-lcGreek .ML__mathit,
 .mt-export-formula .mt-ds-lcGreek .ML__cmr {
-  font-family: var(--mt-ds-lcGreek-font, Symbol, serif) !important;
+  font-family: var(--mt-ds-lcGreek-font, "Times New Roman", "TeX Gyre Termes", Symbol, serif) !important;
   font-weight: var(--mt-ds-lcGreek-weight, 400) !important;
   font-style: var(--mt-ds-lcGreek-style, italic) !important;
 }
 
+.mt-export-formula .ucGreek,
+.mt-export-formula .ucGreek.ML__mathit,
 .mt-export-formula .mt-ds-ucGreek,
 .mt-export-formula .mt-ds-ucGreek .ML__mathit,
 .mt-export-formula .mt-ds-ucGreek .ML__cmr,
 .mt-export-formula .mt-ds-ucGreek .ML__mathbf {
-  font-family: var(--mt-ds-ucGreek-font, Symbol, serif) !important;
+  font-family: var(--mt-ds-ucGreek-font, "Times New Roman", "TeX Gyre Termes", Symbol, serif) !important;
   font-weight: var(--mt-ds-ucGreek-weight, 400) !important;
   font-style: var(--mt-ds-ucGreek-style, italic) !important;
+}
+
+/* Delimiters — match canvas (no KaTeX_Size CM bows). */
+.mt-export-formula .ML__delim-size1,
+.mt-export-formula .ML__delim-size2,
+.mt-export-formula .ML__delim-size3,
+.mt-export-formula .ML__delim-size4,
+.mt-export-formula .ML__delim-mult,
+.mt-export-formula .ML__delim-mult > span {
+  font-family: "Times New Roman", "TeX Gyre Termes", Symbol, "Cambria Math", serif !important;
+  font-weight: 400 !important;
+  font-style: normal !important;
+}
+.mt-export-formula .ML__delim-size1,
+.mt-export-formula .ML__delim-size2,
+.mt-export-formula .ML__delim-size3,
+.mt-export-formula .ML__delim-size4 {
+  display: inline-block;
+  transform: scaleX(0.72);
+  transform-origin: center center;
+}
+.mt-export-formula .ML__delim-mult {
+  display: inline-block;
+  transform: scaleX(0.78);
+  transform-origin: center center;
+}
+
+/*
+ * Fraction / sqrt rules: MathLive uses min-height: max(1px, 0.04em).
+ * At export Full 10pt, 0.04em < 1px so the 1px floor thickens high-DPR PNGs.
+ * Drop the pixel floor; keep pure em thickness (MathType-like hairline).
+ */
+.mt-export-formula .ML__frac-line {
+  min-height: 0 !important;
+}
+.mt-export-formula .ML__frac-line:after {
+  min-height: var(--frac-line-thickness, 0.04em) !important;
+  margin-top: var(--frac-line-margin, -0.04em) !important;
+  height: auto !important;
+}
+.mt-export-formula .ML__sqrt-line {
+  height: 0.04em !important;
+  min-height: 0 !important;
+}
+.mt-export-formula .ML__sqrt-line:before {
+  min-height: 0.04em !important;
+  margin-top: -0.04em !important;
 }
 
 /* Define Spacing — mirrored from :root / inline vars on the export host. */
@@ -95,5 +146,15 @@
   padding-top: var(--mt-den-gap, 0.1em);
 }
 .mt-export-formula .ML__array {
-  border-spacing: var(--mt-matrix-col-gap, 0.5em) var(--mt-matrix-row-gap, 0.5em);
+  border-spacing: var(--mt-matrix-col-gap, 1.2em) var(--mt-matrix-row-gap, 1em);
+}
+.mt-export-formula .ML__mtable .ML__arraycolsep {
+  width: calc(var(--mt-matrix-col-gap, 1.2em) * 0.4) !important;
+  min-width: calc(var(--mt-matrix-col-gap, 1.2em) * 0.4) !important;
+}
+.mt-export-formula .ML__mtable .col-align-c,
+.mt-export-formula .ML__mtable .col-align-l,
+.mt-export-formula .ML__mtable .col-align-r {
+  padding-top: calc(var(--mt-matrix-row-gap, 1em) * 0.28);
+  padding-bottom: calc(var(--mt-matrix-row-gap, 1em) * 0.28);
 }
