@@ -83,3 +83,17 @@
   font-weight: var(--mt-ds-ucGreek-weight, 400) !important;
   font-style: var(--mt-ds-ucGreek-style, italic) !important;
 }
+
+/* Define Spacing — mirrored from :root / inline vars on the export host. */
+.mt-export-formula {
+  line-height: var(--mt-line-spacing, 1.2);
+}
+.mt-export-formula .ML__mfrac > span:first-child {
+  padding-bottom: var(--mt-num-gap, 0.1em);
+}
+.mt-export-formula .ML__mfrac > span:last-child {
+  padding-top: var(--mt-den-gap, 0.1em);
+}
+.mt-export-formula .ML__array {
+  border-spacing: var(--mt-matrix-col-gap, 0.5em) var(--mt-matrix-row-gap, 0.5em);
+}
