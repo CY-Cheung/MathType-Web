@@ -127,6 +127,23 @@ export function fontStackFor(font: string): string {
   return `"${name}", "Times New Roman", "TeX Gyre Termes", serif`;
 }
 
+/**
+ * Unicode Greek (U+0370+) must not rely on Adobe Symbol encoding — Symbol's
+ * slot map is not Unicode, so `\theta` would fall back to KaTeX CM. Prefer
+ * Times New Roman italic (MathType-like) with Symbol / Cambria as extras.
+ */
+export function greekFontStackFor(font: string): string {
+  const name = font.trim() || "Times New Roman";
+  const lower = name.toLowerCase();
+  if (lower === "symbol" || lower.includes("symbol")) {
+    return `"Times New Roman", "TeX Gyre Termes", "Liberation Serif", Symbol, "Cambria Math", "Segoe UI Symbol", serif`;
+  }
+  if (lower === "times new roman" || lower === "tex gyre termes") {
+    return fontStackFor(name);
+  }
+  return `"${name}", "Times New Roman", "TeX Gyre Termes", "Cambria Math", serif`;
+}
+
 export function cssWeight(bold: boolean): string {
   return bold ? "700" : "400";
 }
@@ -274,9 +291,16 @@ export type StyleCssBundle = {
   style: string;
 };
 
-export function styleCssBundle(face: StyleFace): StyleCssBundle {
+export function styleCssBundle(
+  face: StyleFace,
+  id?: DefineStyleId,
+): StyleCssBundle {
+  const font =
+    id === "lcGreek" || id === "ucGreek"
+      ? greekFontStackFor(face.font)
+      : fontStackFor(face.font);
   return {
-    font: fontStackFor(face.font),
+    font,
     weight: cssWeight(face.bold),
     style: cssStyle(face.italic),
   };
@@ -307,7 +331,7 @@ export function applyDefineStylesCssVars(
   for (const id of STYLE_IDS) {
     const face = prefs.styles[id];
     const names = styleVarNames(id);
-    const bundle = styleCssBundle(face);
+    const bundle = styleCssBundle(face, id);
     style.setProperty(names.font, bundle.font);
     style.setProperty(names.weight, bundle.weight);
     style.setProperty(names.style, bundle.style);
@@ -342,7 +366,7 @@ export function defineStylesInlineVars(
   for (const id of STYLE_IDS) {
     const face = prefs.styles[id];
     const names = styleVarNames(id);
-    const bundle = styleCssBundle(face);
+    const bundle = styleCssBundle(face, id);
     parts.push(`${names.font}:${bundle.font}`);
     parts.push(`${names.weight}:${bundle.weight}`);
     parts.push(`${names.style}:${bundle.style}`);
@@ -435,20 +459,49 @@ ${p}.mt-ds-user2 .ML__mathit {
 ${p}.lcGreek,
 ${p}.lcGreek.ML__mathit,
 ${p}.lcGreek.ML__mathbf,
+${p}.lcGreek .ML__mathit,
+${p}.lcGreek .ML__cmr,
 ${p}.mt-ds-lcGreek,
 ${p}.mt-ds-lcGreek .ML__mathit,
 ${p}.mt-ds-lcGreek .ML__cmr {
-  font-family: var(--mt-ds-lcGreek-font, Symbol, serif) !important;
+  font-family: var(--mt-ds-lcGreek-font, "Times New Roman", "TeX Gyre Termes", Symbol, serif) !important;
   font-weight: var(--mt-ds-lcGreek-weight, 400) !important;
   font-style: var(--mt-ds-lcGreek-style, italic) !important;
 }
+${p}.ucGreek,
+${p}.ucGreek.ML__mathit,
+${p}.ucGreek.ML__mathbf,
 ${p}.mt-ds-ucGreek,
 ${p}.mt-ds-ucGreek .ML__mathit,
 ${p}.mt-ds-ucGreek .ML__cmr,
 ${p}.mt-ds-ucGreek .ML__mathbf {
-  font-family: var(--mt-ds-ucGreek-font, Symbol, serif) !important;
+  font-family: var(--mt-ds-ucGreek-font, "Times New Roman", "TeX Gyre Termes", Symbol, serif) !important;
   font-weight: var(--mt-ds-ucGreek-weight, 400) !important;
   font-style: var(--mt-ds-ucGreek-style, italic) !important;
+}
+/* Delimiters: drop KaTeX_Size* CM bows — Times/Symbol, slightly narrower. */
+${p}.ML__delim-size1,
+${p}.ML__delim-size2,
+${p}.ML__delim-size3,
+${p}.ML__delim-size4,
+${p}.ML__delim-mult,
+${p}.ML__delim-mult > span {
+  font-family: "Times New Roman", "TeX Gyre Termes", Symbol, "Cambria Math", serif !important;
+  font-weight: 400 !important;
+  font-style: normal !important;
+}
+${p}.ML__delim-size1,
+${p}.ML__delim-size2,
+${p}.ML__delim-size3,
+${p}.ML__delim-size4 {
+  display: inline-block;
+  transform: scaleX(0.72);
+  transform-origin: center center;
+}
+${p}.ML__delim-mult {
+  display: inline-block;
+  transform: scaleX(0.78);
+  transform-origin: center center;
 }
 ${p}.ML__content-placeholder {
   font-family: var(--mt-ds-variable-font, var(--mt-math-font)) !important;

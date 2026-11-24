@@ -61,7 +61,14 @@
 
 .mt-markup .lcGreek,
 .mt-markup .lcGreek.ML__mathit {
-  font-family: var(--mt-ds-lcGreek-font, Symbol, serif) !important;
+  font-family: var(--mt-ds-lcGreek-font, "Times New Roman", "TeX Gyre Termes", Symbol, serif) !important;
   font-weight: var(--mt-ds-lcGreek-weight, 400) !important;
   font-style: var(--mt-ds-lcGreek-style, italic) !important;
+}
+.mt-markup .ucGreek,
+.mt-markup .ucGreek.ML__mathit,
+.mt-markup .mt-ds-ucGreek {
+  font-family: var(--mt-ds-ucGreek-font, "Times New Roman", "TeX Gyre Termes", Symbol, serif) !important;
+  font-weight: var(--mt-ds-ucGreek-weight, 400) !important;
+  font-style: var(--mt-ds-ucGreek-style, italic) !important;
 }

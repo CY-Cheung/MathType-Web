@@ -1,12 +1,19 @@
 import { useRef, useState } from "react";
 import type { ExportFormat } from "../adapters/clipboard";
 import { EXPORT_SHORTCUT } from "../core/shortcuts";
+import {
+  dpiForExportScale,
+  EXPORT_SCALE_PRESETS,
+  type ExportScale,
+} from "../types/exportPrefs";
 import { FloatingPortal } from "./FloatingPortal";
 
 type ExportMenuProps = {
   busy?: boolean;
   plainImageNoLink: boolean;
+  exportScale: ExportScale;
   onPlainImageNoLinkChange: () => void;
+  onExportScaleChange: (scale: ExportScale) => void;
   onExport: (format: ExportFormat) => void;
 };
 
@@ -14,17 +21,12 @@ function keepFocus(event: { preventDefault: () => void }): void {
   event.preventDefault();
 }
 
-const OPTIONS: { format: ExportFormat; label: string; hint: string }[] = [
-  { format: "mathml", label: "MathML", hint: "Word native equation" },
-  { format: "png", label: "PNG (4×)", hint: "Transparent · Word paste" },
-  { format: "svg", label: "SVG", hint: "Vector · no jaggies" },
-  { format: "latex", label: "LaTeX", hint: "Plain text · fallback" },
-];
-
 export function ExportMenu({
   busy = false,
   plainImageNoLink,
+  exportScale,
   onPlainImageNoLinkChange,
+  onExportScaleChange,
   onExport,
 }: ExportMenuProps) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -35,6 +37,8 @@ export function ExportMenu({
     setOpen(false);
     onExport(format);
   };
+
+  const dpi = dpiForExportScale(exportScale);
 
   return (
     <div ref={rootRef} className="relative flex items-stretch">
@@ -69,20 +73,76 @@ export function ExportMenu({
         align="end"
         zIndex={70}
         insideRefs={[rootRef]}
-        className="min-w-[240px] border border-[#999] bg-white shadow-[0_4px_12px_rgba(0,0,0,0.18)]"
+        className="min-w-[260px] border border-[#999] bg-white shadow-[0_4px_12px_rgba(0,0,0,0.18)]"
       >
-        {OPTIONS.map((opt) => (
-          <button
-            key={opt.format}
-            type="button"
-            className="flex w-full flex-col items-start gap-0.5 border-b border-[#ececec] px-2.5 py-1.5 text-left hover:bg-[#f4f7fb]"
-            onMouseDown={keepFocus}
-            onClick={() => run(opt.format)}
-          >
-            <span className="text-[12px] font-medium text-[#222]">{opt.label}</span>
-            <span className="text-[10px] text-[#666]">{opt.hint}</span>
-          </button>
-        ))}
+        <button
+          type="button"
+          className="flex w-full flex-col items-start gap-0.5 border-b border-[#ececec] px-2.5 py-1.5 text-left hover:bg-[#f4f7fb]"
+          onMouseDown={keepFocus}
+          onClick={() => run("mathml")}
+        >
+          <span className="text-[12px] font-medium text-[#222]">MathML</span>
+          <span className="text-[10px] text-[#666]">Word native equation</span>
+        </button>
+        <button
+          type="button"
+          className="flex w-full flex-col items-start gap-0.5 border-b border-[#ececec] px-2.5 py-1.5 text-left hover:bg-[#f4f7fb]"
+          onMouseDown={keepFocus}
+          onClick={() => run("png")}
+        >
+          <span className="text-[12px] font-medium text-[#222]">
+            PNG ({exportScale}× · {dpi} DPI)
+          </span>
+          <span className="text-[10px] text-[#666]">Transparent · Word paste</span>
+        </button>
+        <div className="border-b border-[#ececec] px-2.5 py-1.5">
+          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[#666]">
+            PNG resolution
+          </div>
+          <div className="flex flex-col gap-0.5">
+            {EXPORT_SCALE_PRESETS.map((scale) => {
+              const scaleDpi = dpiForExportScale(scale);
+              const selected = scale === exportScale;
+              return (
+                <button
+                  key={scale}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={selected}
+                  className="flex w-full items-center gap-2 px-1 py-1 text-left text-[12px] hover:bg-[#f4f7fb]"
+                  onMouseDown={keepFocus}
+                  onClick={() => onExportScaleChange(scale)}
+                >
+                  <span className="inline-block w-3 shrink-0 text-center text-[10px]">
+                    {selected ? "●" : "○"}
+                  </span>
+                  <span>
+                    {scale}× ({scaleDpi} DPI)
+                    {scale === 6 ? " · default" : ""}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <button
+          type="button"
+          className="flex w-full flex-col items-start gap-0.5 border-b border-[#ececec] px-2.5 py-1.5 text-left hover:bg-[#f4f7fb]"
+          onMouseDown={keepFocus}
+          onClick={() => run("svg")}
+        >
+          <span className="text-[12px] font-medium text-[#222]">SVG</span>
+          <span className="text-[10px] text-[#666]">Vector · no jaggies</span>
+        </button>
+        <button
+          type="button"
+          className="flex w-full flex-col items-start gap-0.5 border-b border-[#ececec] px-2.5 py-1.5 text-left hover:bg-[#f4f7fb]"
+          onMouseDown={keepFocus}
+          onClick={() => run("latex")}
+        >
+          <span className="text-[12px] font-medium text-[#222]">LaTeX</span>
+          <span className="text-[10px] text-[#666]">Plain text · fallback</span>
+        </button>
         <button
           type="button"
           role="menuitemcheckbox"

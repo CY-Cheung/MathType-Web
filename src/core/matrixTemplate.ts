@@ -144,9 +144,19 @@ function dashedRule(columns: number): string {
   return `\\mathrlap{\\hspace{${SLOT_BACK}}${parts.join("")}}`;
 }
 
+/**
+ * Empty slots start in `\displaystyle` so fractions (`\frac{\theta}{2}`) keep
+ * MathType-like full size inside arrays (TeX defaults to textstyle in matrix).
+ */
+function cellSlot(): string {
+  return "{\\displaystyle#?}";
+}
+
 function rowLatex(style: LineStyle | undefined, columns: number): string {
-  const cells = Array.from({ length: columns }, () => "#?");
-  if (style && style !== "none") cells[0] = `#?${style === "dashed" ? dashedRule(columns) : solidRule(columns)}`;
+  const cells = Array.from({ length: columns }, () => cellSlot());
+  if (style && style !== "none") {
+    cells[0] = `${cellSlot()}${style === "dashed" ? dashedRule(columns) : solidRule(columns)}`;
+  }
   return cells.join("&");
 }
 
@@ -180,14 +190,25 @@ function raiseLatex(latex: string, align: RowAlign): string {
   return `\\raise{${em}}{${latex}}`;
 }
 
+/** Extra row skip when no partition rule (Define Spacing CSS also pads). */
+const PLAIN_ROW_GAP = "0.45em";
+
 export function matrixToLatex(spec: MatrixSpec): string {
   const rows: string[] = [];
   const breaks: string[] = [];
   for (let row = 0; row < spec.rows; row += 1) {
     const below = row < spec.rows - 1 ? spec.horizontalLines[row] : undefined;
     rows.push(rowLatex(below, spec.columns));
-    if (row < spec.rows - 1) breaks.push(below && below !== "none" ? `\\\\[${RULE_ROW_GAP}]` : "\\\\");
+    if (row < spec.rows - 1) {
+      breaks.push(
+        below && below !== "none" ? `\\\\[${RULE_ROW_GAP}]` : `\\\\[${PLAIN_ROW_GAP}]`,
+      );
+    }
   }
-  const array = `\\begin{array}{${columnSpec(spec)}}${rows.map((row, index) => (index === 0 ? row : `${breaks[index - 1]}${row}`)).join("")}\\end{array}`;
+  // Leading `\displaystyle` covers user-typed cells that replace placeholders.
+  const body = rows
+    .map((row, index) => (index === 0 ? row : `${breaks[index - 1]}${row}`))
+    .join("");
+  const array = `\\begin{array}{${columnSpec(spec)}}\\displaystyle ${body}\\end{array}`;
   return raiseLatex(fenceLatex(spec.fence, array, spec.rows), spec.rowAlign);
 }

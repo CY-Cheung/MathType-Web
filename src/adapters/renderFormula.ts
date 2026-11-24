@@ -19,6 +19,10 @@ import {
   fontStackFor,
   readDefineStylesPrefs,
 } from "../types/defineStyles";
+import {
+  DEFAULT_EXPORT_SCALE,
+  dpiForExportScale,
+} from "../types/exportPrefs";
 import { defaultStylePreset } from "../types/preset";
 import {
   bytesToPngDataUrl,
@@ -33,7 +37,7 @@ import {
  * Physical Full size for PNG / Word export (Define Sizes → Full).
  * Workspace Zoom (status-bar %) is view-only and must never feed this path —
  * clipboard baseline / pt sizing stay on Full pt regardless of 100–800% UI zoom.
- * True 4× / 384 DPI and negative baseline valign are unchanged.
+ * Raster scale (default 6× / 576 DPI) is independent of view zoom.
  */
 function exportFontPt(): number {
   try {
@@ -43,10 +47,7 @@ function exportFontPt(): number {
   }
 }
 
-/** SPEC Phase 2: 4× High-DPI PNG locked to physical 10pt (= 384 DPI vs 96). */
-export const DEFAULT_EXPORT_SCALE = 4;
-
-export { EXPORT_PNG_DPI, EXPORT_PNG_PIXELS_PER_METER };
+export { DEFAULT_EXPORT_SCALE, EXPORT_PNG_DPI, EXPORT_PNG_PIXELS_PER_METER };
 
 /** CSS px → pt at 96 DPI (SPEC: depthPx * 0.75 → vertical-align pt). */
 export const PX_TO_PT = 0.75;
@@ -237,9 +238,9 @@ export type RasterResult = {
 };
 
 /**
- * Rasterize MathLive markup at true `scale`× (default 4) via html-to-image
- * `pixelRatio`, then stamp PNG `pHYs` at 384 DPI so Word does not treat the
- * bitmap as a 96 DPI screen grab and soft-downsample it.
+ * Rasterize MathLive markup at true `scale`× (default 6) via html-to-image
+ * `pixelRatio`, then stamp PNG `pHYs` at 96×scale DPI so Word keeps Full pt
+ * without soft-downsampling a 96 DPI screen grab.
  */
 export async function renderFormulaPng(
   latex: string,
@@ -249,14 +250,14 @@ export async function renderFormulaPng(
   try {
     const rect = node.getBoundingClientRect();
     const depthPx = measureDepthPx(node);
-    // Prefer fractional px → pt for Word; keep integer px attrs for CF_HTML.
-    const cssWidth = Math.max(1, rect.width);
-    const cssHeight = Math.max(1, rect.height);
-    const widthPt = pxToPt(cssWidth);
-    const heightPt = pxToPt(cssHeight);
-    // html-to-image sets canvas.width = (canvasWidth || width) * pixelRatio.
-    // Pass CSS layout size + pixelRatio only — do NOT also pass canvasWidth×scale
-    // or the bitmap becomes scale² (e.g. 16×). True 4× = vector draw at 4× DPR.
+    // Integer CSS box avoids sub-pixel soft edges when html-to-image scales.
+    const cssWidth = Math.max(1, Math.ceil(rect.width));
+    const cssHeight = Math.max(1, Math.ceil(rect.height));
+    const widthPt = pxToPt(Math.max(1, rect.width));
+    const heightPt = pxToPt(Math.max(1, rect.height));
+    const dpi = dpiForExportScale(scale);
+    // html-to-image: canvas.width = width * pixelRatio. Pass layout size +
+    // pixelRatio only — do NOT also pass canvasWidth×scale (that squares DPR).
     const rawDataUrl = await toPng(node, {
       pixelRatio: scale,
       width: cssWidth,
@@ -268,9 +269,10 @@ export async function renderFormulaPng(
         transform: "none",
         width: `${cssWidth}px`,
         height: `${cssHeight}px`,
+        imageRendering: "auto",
       },
     });
-    const stamped = setPngPhysDpi(dataUrlToBytes(rawDataUrl), EXPORT_PNG_DPI);
+    const stamped = setPngPhysDpi(dataUrlToBytes(rawDataUrl), dpi);
     const dataUrl = bytesToPngDataUrl(stamped);
     const blob = new Blob([stamped.buffer.slice(stamped.byteOffset, stamped.byteOffset + stamped.byteLength) as ArrayBuffer], {
       type: "image/png",

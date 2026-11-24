@@ -82,6 +82,38 @@ math-field.mt-math-field .ML__array,
 .mt-export-formula .ML__array {
   border-spacing: var(--mt-matrix-col-gap) var(--mt-matrix-row-gap);
 }
+/* MathLive paints matrices as `.ML__mtable` + `.ML__arraycolsep` (not table). */
+math-field.mt-math-field .ML__mtable .ML__arraycolsep,
+.mt-export-formula .ML__mtable .ML__arraycolsep {
+  width: calc(var(--mt-matrix-col-gap, 1.2em) * 0.4) !important;
+  min-width: calc(var(--mt-matrix-col-gap, 1.2em) * 0.4) !important;
+}
+math-field.mt-math-field .ML__mtable .col-align-c,
+math-field.mt-math-field .ML__mtable .col-align-l,
+math-field.mt-math-field .ML__mtable .col-align-r,
+.mt-export-formula .ML__mtable .col-align-c,
+.mt-export-formula .ML__mtable .col-align-l,
+.mt-export-formula .ML__mtable .col-align-r {
+  padding-top: calc(var(--mt-matrix-row-gap, 1em) * 0.28);
+  padding-bottom: calc(var(--mt-matrix-row-gap, 1em) * 0.28);
+}
+
+/* Prefer em hairlines over MathLive's 1px floor (visible at 100% / export). */
+math-field.mt-math-field .ML__frac-line {
+  min-height: 0 !important;
+}
+math-field.mt-math-field .ML__frac-line:after {
+  min-height: var(--frac-line-thickness, 0.04em) !important;
+  margin-top: var(--frac-line-margin, -0.04em) !important;
+}
+math-field.mt-math-field .ML__sqrt-line {
+  height: 0.04em !important;
+  min-height: 0 !important;
+}
+math-field.mt-math-field .ML__sqrt-line:before {
+  min-height: 0.04em !important;
+  margin-top: -0.04em !important;
+}
 
 @media (min-width: 640px) {
   math-field.mt-math-field {

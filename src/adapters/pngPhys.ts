@@ -1,13 +1,16 @@
 /**
  * PNG `pHYs` (physical pixel dimensions) helpers for Word High-DPI paste.
- * 384 DPI ≈ 4× screen (96 DPI) so a 4× raster displays at 10pt without soft upscaling.
+ * DPI = 96 × export scale (4→384, 6→576, 8→768) so the bitmap displays at
+ * Full pt without soft upscaling.
  */
 
-/** Target Word / CF_HTML bitmap density (4 × 96 DPI). */
-export const EXPORT_PNG_DPI = 384;
+import { DEFAULT_EXPORT_SCALE, dpiForExportScale } from "../types/exportPrefs";
 
-/** pixels/meter for 384 DPI: round(384 / 0.0254). */
-export const EXPORT_PNG_PIXELS_PER_METER = Math.round(EXPORT_PNG_DPI / 0.0254); // 15118
+/** Default density matches DEFAULT_EXPORT_SCALE (6× → 576 DPI). */
+export const EXPORT_PNG_DPI = dpiForExportScale(DEFAULT_EXPORT_SCALE);
+
+/** pixels/meter for the default export DPI. */
+export const EXPORT_PNG_PIXELS_PER_METER = Math.round(EXPORT_PNG_DPI / 0.0254);
 
 const PNG_SIG = [137, 80, 78, 71, 13, 10, 26, 10] as const;
 

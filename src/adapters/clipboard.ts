@@ -144,6 +144,8 @@ export type InlinePngHtmlOptions = {
    * When false, wrap img in `<a href="#eq=…">` for click-back round-trip.
    */
   plainImageNoLink?: boolean;
+  /** PNG raster scale (4 / 6 / 8). Defaults to DEFAULT_EXPORT_SCALE. */
+  exportScale?: number;
 };
 
 /**
@@ -275,7 +277,11 @@ export async function copyExport(
     case "mathml":
       return copyMathMl(latex);
     case "png":
-      return copyPng(latex, DEFAULT_EXPORT_SCALE, options);
+      return copyPng(
+        latex,
+        options.exportScale ?? DEFAULT_EXPORT_SCALE,
+        options,
+      );
     case "svg":
       return copySvg(latex);
     case "latex":
