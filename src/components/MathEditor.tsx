@@ -11,6 +11,11 @@ import {
   lockModeToActiveStyle,
 } from "../core/activeStyleApply";
 import { focusAt, readSelection, type EditorSelection } from "../core/editorSelection";
+import {
+  insertMathLineBreak,
+  isPlainEnterKey,
+  shouldIgnoreEnterForIme,
+} from "../core/enterLineBreak";
 import { insertAdaptedLatex } from "../core/insertAdapted";
 import {
   isMathStyleShortcut,
@@ -116,6 +121,49 @@ function findKeyboardSink(field: MathfieldElement): HTMLElement | null {
 }
 
 /**
+ * Capture-phase Enter on the sink (+ host fallback). MathLive handles keydown
+ * on the sink; capture + stopImmediatePropagation runs before its handler.
+ */
+function bindEnterCapture(
+  field: MathfieldElement,
+): () => void {
+  const targets = new Set<EventTarget>();
+  const sink = findKeyboardSink(field);
+  if (sink) targets.add(sink);
+  targets.add(field);
+  const root = field.shadowRoot;
+  if (root) targets.add(root);
+
+  const onKeyDown = (event: Event) => {
+    if (!(event instanceof KeyboardEvent)) return;
+    if (!isPlainEnterKey(event)) return;
+    if (shouldIgnoreEnterForIme(event)) return;
+    // Latex mode: leave Enter to MathLive complete keybinding.
+    if (field.mode === "latex") return;
+
+    const path =
+      typeof event.composedPath === "function" ? event.composedPath() : [];
+    if (!path.includes(field) && event.target !== field && event.target !== sink) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    commitPendingComposition(field);
+    insertMathLineBreak(field);
+  };
+
+  for (const target of targets) {
+    target.addEventListener("keydown", onKeyDown, true);
+  }
+  return () => {
+    for (const target of targets) {
+      target.removeEventListener("keydown", onKeyDown, true);
+    }
+  };
+}
+
+/**
  * Unlock the OS / Android native keyboard.
  * MathLive ships the sink as `inputmode=none` so only its virtual keyboard
  * appears — override to `text` and keep autocorrect off for formula entry.
@@ -203,6 +251,17 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
     let inputModeObserver: MutationObserver | null = null;
     let detachBackspaceBridge: (() => void) | null = null;
     let detachImeGuard: (() => void) | null = null;
+    let detachEnterCapture: (() => void) | null = null;
+    let enterSinkBound: HTMLElement | null = null;
+
+    const attachEnterCapture = (mf: MathfieldElement) => {
+      const sink = findKeyboardSink(mf);
+      // Rebind only when the sink node is (re)created — not on every attr tweak.
+      if (sink && sink === enterSinkBound && detachEnterCapture) return;
+      detachEnterCapture?.();
+      enterSinkBound = sink;
+      detachEnterCapture = bindEnterCapture(mf);
+    };
 
     const configure = () => {
       if (cancelled || fieldRef.current !== field) return;
@@ -233,14 +292,29 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
       // Active Style owns insert style (do not inherit upright from digits).
       bindInsertStyleHook(field, () => activeStyleRef.current);
       // Drop built-in Quote / Alt+T math↔text toggles — Active Style owns mode.
+      // Bind math-mode Enter/Return → addRowAfter so MathLive skips its bare
+      // Enter "commit"/change-only path (which does nothing on a single line).
       try {
         const bindings = field.keybindings ?? [];
-        field.keybindings = bindings.filter((row) => {
+        const filtered = bindings.filter((row) => {
+          const key = String(row.key ?? "");
+          // Remove any prior Enter bindings in math (we re-add below).
+          if (
+            (key === "[Enter]" || key === "[Return]" || key === "enter") &&
+            (!row.ifMode || row.ifMode === "math")
+          ) {
+            return false;
+          }
           const cmd = Array.isArray(row.command) ? row.command[0] : row.command;
           if (cmd !== "switchMode") return true;
           const target = Array.isArray(row.command) ? row.command[1] : undefined;
           return target === "latex";
         });
+        field.keybindings = [
+          ...filtered,
+          { key: "[Enter]", ifMode: "math", command: "addRowAfter" },
+          { key: "[Return]", ifMode: "math", command: "addRowAfter" },
+        ];
       } catch {
         /* keybindings may be frozen on some builds */
       }
@@ -254,6 +328,7 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
       markEmptySlots(root);
       syncEmptyPlaceholder(field);
       lockModeToActiveStyle(field, activeStyleRef.current);
+      attachEnterCapture(field);
 
       slotObserver?.disconnect();
       slotObserver = new MutationObserver(() => {
@@ -267,6 +342,8 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
       inputModeObserver = new MutationObserver(() => {
         if (cancelled) return;
         unlockFieldNativeKeyboard(field);
+        // Sink recreate → rebind Enter capture on the new node.
+        attachEnterCapture(field);
       });
       inputModeObserver.observe(root, {
         subtree: true,
@@ -332,6 +409,7 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
       inputModeObserver?.disconnect();
       detachBackspaceBridge?.();
       detachImeGuard?.();
+      detachEnterCapture?.();
       field.removeEventListener("focusin", onFocusIn);
       field.removeEventListener("pointerup", onPointerUp);
       field.removeEventListener("input", onInput);
