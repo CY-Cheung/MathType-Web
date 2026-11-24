@@ -58,6 +58,7 @@ export const DEFINE_STYLE_ORDER: readonly DefineStyleMeta[] = [
 /** Common faces offered in the Font `<select>` (Custom… for free-form names). */
 export const COMMON_FONT_PRESETS: readonly string[] = [
   "Times New Roman",
+  "Euclid",
   "STIX Two Text",
   "STIX Two Math",
   "TeX Gyre Termes",
@@ -115,6 +116,10 @@ export function fontStackFor(font: string): string {
   // Windows: local TNR; Android / missing TNR → self-hosted STIX Two Text.
   if (lower === "times new roman") {
     return `"Times New Roman", "STIX Two Text", serif`;
+  }
+  // Local MathType Euclid only — never fetch /fonts/euclid.*; fall through to TNR/STIX.
+  if (lower === "euclid") {
+    return `"Euclid", "Times New Roman", "STIX Two Text", "STIX Two Math", serif`;
   }
   if (lower === "stix two text") {
     return `"STIX Two Text", "Times New Roman", serif`;

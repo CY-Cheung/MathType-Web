@@ -2,22 +2,27 @@
  * Force MathLive letter spans off KaTeX_Math / KaTeX_Main / Symbol.
  * Shared by shadow DOM injection, export host, and toolbar markup.
  *
+ * Rules read live `--mt-ds-*-font` CSS vars from Define Styles
+ * (`fontStackFor`): Euclid → `"Euclid", "Times New Roman", "STIX Two Text", …`;
+ * Times New Roman → `"Times New Roman", "STIX Two Text", serif`. Defaults stay TNR.
  * Stretchy delimiters / large ops stay on KaTeX faces (untouched selectors).
  */
 
 import { MT_FONT_STACK } from "./fontStack";
 
-/** Exact letter stack — shadow/export asserts fontFamily starts with this. */
+/** Default letter stack when Define Styles vars are unset (still TNR → STIX). */
 export const LETTER_FONT_STACK = MT_FONT_STACK;
 
 /**
  * High-specificity !important rules. Append AFTER Define Styles mapped CSS
  * so Unicode Greek (`.lcGreek`) cannot stay on Symbol → CM-looking fallbacks.
+ * Family values come from CSS vars — selecting Euclid in Define Styles updates
+ * `--mt-ds-variable-font` / `--mt-ds-lcGreek-font` without rebuilding this sheet.
  */
 export function buildLetterFaceForceCss(scopePrefix = ""): string {
   const p = scopePrefix;
   return `
-/* --- Letter faces: Times New Roman → STIX Two Text (never KaTeX_Math) --- */
+/* --- Letter faces follow Define Styles vars (never KaTeX_Math) --- */
 ${p}.ML__mathit,
 ${p}.ML__mathbfit,
 ${p}.ML__main {
