@@ -226,16 +226,22 @@ async function registerFace(record: LocalFontRecord): Promise<void> {
   }
 }
 
-export async function addLocalFontFromFile(file: File): Promise<LocalFontMeta> {
-  const inferred = inferFontMeta(file.name);
+export async function addLocalFontFromFile(
+  file: File,
+  overrides?: { format?: LocalFontFormat; fileName?: string },
+): Promise<LocalFontMeta> {
+  const fileName =
+    overrides?.fileName ??
+    (file.name.replace(/^.*[/\\]/, "") || "font");
+  const inferred = inferFontMeta(fileName);
   const buffer = await file.arrayBuffer();
   const record: LocalFontRecord = {
     id: newId(),
     family: inferred.family,
     weight: inferred.weight,
     style: inferred.style,
-    format: inferred.format,
-    fileName: file.name.replace(/^.*[/\\]/, ""),
+    format: overrides?.format ?? inferred.format,
+    fileName,
     buffer,
     addedAt: Date.now(),
   };
@@ -244,35 +250,126 @@ export async function addLocalFontFromFile(file: File): Promise<LocalFontMeta> {
   return toMeta(record);
 }
 
-/** Allowed font extensions (case-insensitive). Used after Android pickers ignore `accept`. */
+/** Allowed font extensions (case-insensitive). */
 export const LOCAL_FONT_EXT_RE = /\.(ttf|otf|woff2?)$/i;
 
 export function isSupportedLocalFontFileName(fileName: string): boolean {
   return LOCAL_FONT_EXT_RE.test(fileName.replace(/^.*[/\\]/, ""));
 }
 
+/**
+ * Sniff sfnt / WOFF magic bytes (first 4). Android content:// pickers often
+ * strip the `.ttf` / `.otf` extension from `File.name`.
+ */
+export function detectFontFormatFromMagic(
+  header: ArrayBuffer | ArrayBufferView,
+): LocalFontFormat | null {
+  const bytes =
+    header instanceof ArrayBuffer
+      ? new Uint8Array(header)
+      : new Uint8Array(header.buffer, header.byteOffset, header.byteLength);
+  if (bytes.length < 4) return null;
+  // TrueType: 0x00010000
+  if (
+    bytes[0] === 0x00 &&
+    bytes[1] === 0x01 &&
+    bytes[2] === 0x00 &&
+    bytes[3] === 0x00
+  ) {
+    return "truetype";
+  }
+  // Apple TrueType: "true"
+  if (
+    bytes[0] === 0x74 &&
+    bytes[1] === 0x72 &&
+    bytes[2] === 0x75 &&
+    bytes[3] === 0x65
+  ) {
+    return "truetype";
+  }
+  // CFF OpenType: "OTTO"
+  if (
+    bytes[0] === 0x4f &&
+    bytes[1] === 0x54 &&
+    bytes[2] === 0x54 &&
+    bytes[3] === 0x4f
+  ) {
+    return "opentype";
+  }
+  // WOFF: "wOFF"
+  if (
+    bytes[0] === 0x77 &&
+    bytes[1] === 0x4f &&
+    bytes[2] === 0x46 &&
+    bytes[3] === 0x46
+  ) {
+    return "woff";
+  }
+  // WOFF2: "wOF2"
+  if (
+    bytes[0] === 0x77 &&
+    bytes[1] === 0x4f &&
+    bytes[2] === 0x46 &&
+    bytes[3] === 0x32
+  ) {
+    return "woff2";
+  }
+  return null;
+}
+
+export function extensionForLocalFontFormat(format: LocalFontFormat): string {
+  switch (format) {
+    case "woff2":
+      return ".woff2";
+    case "woff":
+      return ".woff";
+    case "opentype":
+      return ".otf";
+    default:
+      return ".ttf";
+  }
+}
+
+/** Append a matching extension when Android stripped it from the display name. */
+export function ensureLocalFontFileName(
+  fileName: string,
+  format: LocalFontFormat,
+): string {
+  const base = fileName.replace(/^.*[/\\]/, "").trim() || "font";
+  if (LOCAL_FONT_EXT_RE.test(base)) return base;
+  return `${base}${extensionForLocalFontFormat(format)}`;
+}
+
 export type LocalFontImportResult = {
   added: LocalFontMeta[];
-  /** File names skipped because the extension is not a supported font. */
+  /** Display names skipped (unsupported extension and no font magic). */
   skipped: string[];
 };
 
 export async function importLocalFontFiles(
   files: FileList | File[],
 ): Promise<LocalFontImportResult> {
-  const all = [...files];
-  const skipped: string[] = [];
-  const list: File[] = [];
-  for (const file of all) {
-    if (isSupportedLocalFontFileName(file.name)) {
-      list.push(file);
-    } else {
-      skipped.push(file.name.replace(/^.*[/\\]/, "") || file.name);
-    }
-  }
   const added: LocalFontMeta[] = [];
-  for (const file of list) {
-    added.push(await addLocalFontFromFile(file));
+  const skipped: string[] = [];
+  for (const file of [...files]) {
+    const rawName =
+      file.name.replace(/^.*[/\\]/, "").trim() || file.name || "(unnamed)";
+    const byExt = isSupportedLocalFontFileName(file.name);
+    let magic: LocalFontFormat | null = null;
+    try {
+      magic = detectFontFormatFromMagic(await file.slice(0, 4).arrayBuffer());
+    } catch {
+      magic = null;
+    }
+    if (!byExt && !magic) {
+      skipped.push(rawName);
+      continue;
+    }
+    const format = byExt ? formatFromFileName(file.name) : (magic as LocalFontFormat);
+    const displayName = ensureLocalFontFileName(rawName, format);
+    added.push(
+      await addLocalFontFromFile(file, { format, fileName: displayName }),
+    );
   }
   return { added, skipped };
 }
