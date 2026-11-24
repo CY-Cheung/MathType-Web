@@ -1,6 +1,13 @@
 import type { MathfieldElement } from "mathlive";
 import { BACKSPACE_SENTINEL } from "./androidBackspaceBridge";
 import { commitPendingComposition } from "./commitComposition";
+import {
+  isFunctionShortcutName,
+  leadingFunctionShortcutPrefix,
+  stripFunctionShortcutPrefix,
+} from "./imeShortcutPrefix";
+
+const STRIPPED_FLAG = "__mtImePrefixStripped";
 
 function findKeyboardSink(field: MathfieldElement): HTMLElement | null {
   const sink = field.shadowRoot?.querySelector(".ML__keyboard-sink");
@@ -20,12 +27,60 @@ function clearSinkQuietly(sink: HTMLElement): void {
 }
 
 /**
+ * Command name of the math operator immediately before the caret
+ * (e.g. `"tan"` when latex ends with `\tan`). Composition atoms serialize
+ * empty, so a live IME buffer does not pollute this suffix.
+ */
+export function functionNameBeforeCaret(field: MathfieldElement): string | null {
+  try {
+    const pos = field.position ?? 0;
+    const before = field.getValue(0, pos, "latex") ?? "";
+    const match = before.match(/\\([A-Za-z]+)\s*$/);
+    if (!match) return null;
+    return isFunctionShortcutName(match[1]) ? match[1] : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Rewrite a composed string that still carries a just-converted shortcut
+ * prefix (`"tanx"` after `\tan` → `"x"`; `"tan"` → `""`).
+ */
+export function rewriteComposedShortcutBuffer(
+  field: MathfieldElement,
+  composed: string,
+): string | null {
+  if (!composed) return null;
+
+  const fromCaret = functionNameBeforeCaret(field);
+  const stripped = stripFunctionShortcutPrefix(composed, fromCaret);
+  if (stripped !== null) return stripped;
+
+  // Fallback: buffer clearly starts with a known shortcut and the caret
+  // already sits after the matching `\<name>`.
+  const lead = leadingFunctionShortcutPrefix(composed);
+  if (!lead) return null;
+  try {
+    const pos = field.position ?? 0;
+    const before = field.getValue(0, pos, "latex") ?? "";
+    if (!new RegExp(`\\\\${lead}\\s*$`).test(before)) return null;
+  } catch {
+    return null;
+  }
+  return stripFunctionShortcutPrefix(composed, lead);
+}
+
+/**
  * Android Samsung Keyboard + MathLive inlineShortcuts (`tan` → `\tan`, …)
- * often leave residual sink text after `compositionend`. The next key then
- * re-inserts the buffered string (`tan tanx`, `sec sec`).
+ * often leave the shortcut letters in the IME buffer. A later
+ * `compositionend` may then submit `"tanx"` while the caret is already after
+ * `\tan`, producing `\tan tanx`.
  *
- * Stuck brown composition is dismissed only when the IME session is idle —
- * never mid-`compositionupdate`, so typed letters stay visible.
+ * Listen on `shadowRoot` (capture) so we run *before* MathLive's sink handler
+ * even for non-`composed` events inside the shadow tree. Rewrite the payload
+ * (prefix strip) and re-dispatch so only the remainder is inserted.
+ * Live composition is never force-committed (keeps letters like `d` visible).
  */
 export function attachImeCompositionGuard(field: MathfieldElement): () => void {
   const controller = new AbortController();
@@ -64,10 +119,8 @@ export function attachImeCompositionGuard(field: MathfieldElement): () => void {
         composing = false;
         lastCompositionData = event.data ?? "";
         lastCompositionActivity = performance.now();
-        // Only suppress an exact duplicate re-insert of the finished string
-        // (tan/sec shortcut leftovers) — do not match prefixes/substrings.
         if (lastCompositionData) {
-          suppressUntil = performance.now() + 180;
+          suppressUntil = performance.now() + 220;
         }
         queueMicrotask(() => clearSinkQuietly(el));
         window.setTimeout(() => clearSinkQuietly(el), 0);
@@ -81,12 +134,26 @@ export function attachImeCompositionGuard(field: MathfieldElement): () => void {
         if (performance.now() > suppressUntil) return;
         if (composing) return;
         const data = event instanceof InputEvent ? (event.data ?? "") : "";
-        if (!data || !lastCompositionData) return;
-        // Exact leftover re-insert only (e.g. full "tan" after `\tan` shortcut).
-        if (data === lastCompositionData) {
+        if (!data) return;
+
+        if (lastCompositionData && data === lastCompositionData) {
           event.preventDefault();
           event.stopImmediatePropagation();
           clearSinkQuietly(el);
+          return;
+        }
+
+        const rewritten = rewriteComposedShortcutBuffer(field, data);
+        if (rewritten === null) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        clearSinkQuietly(el);
+        if (rewritten) {
+          try {
+            field.executeCommand(["typedText", rewritten]);
+          } catch {
+            /* typedText may be unavailable on some builds */
+          }
         }
       },
       { capture: true, signal },
@@ -101,18 +168,54 @@ export function attachImeCompositionGuard(field: MathfieldElement): () => void {
   ensureSink();
 
   const root = field.shadowRoot;
-  const observer =
-    root &&
-    new MutationObserver(() => {
-      ensureSink();
-    });
-  observer?.observe(root!, { childList: true, subtree: true });
+  if (!root) {
+    return () => {
+      controller.abort();
+    };
+  }
+
+  const observer = new MutationObserver(() => {
+    ensureSink();
+  });
+  observer.observe(root, { childList: true, subtree: true });
 
   /**
-   * Commit only a *stuck* composition (atom / residual after IME went idle).
-   * Never interrupt a live composition session — that hid letters like `d`
-   * until compositionend finally flushed `dy`.
+   * shadowRoot capture runs before MathLive's sink `compositionend` handler.
+   * Rewrite `"tanx"` → `"x"` (or `"tan"` → `""`) and re-dispatch.
    */
+  root.addEventListener(
+    "compositionend",
+    (event: Event) => {
+      if (!(event instanceof CompositionEvent)) return;
+      if ((event as CompositionEvent & { [STRIPPED_FLAG]?: boolean })[STRIPPED_FLAG]) {
+        return;
+      }
+
+      const data = event.data ?? "";
+      const rewritten = rewriteComposedShortcutBuffer(field, data);
+      if (rewritten === null || rewritten === data) return;
+
+      // Block MathLive from seeing the raw buffer; feed the stripped data instead.
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      composing = false;
+      lastCompositionActivity = performance.now();
+
+      const el = findKeyboardSink(field);
+      if (!el) return;
+
+      const next = new CompositionEvent("compositionend", {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        data: rewritten,
+      });
+      Object.defineProperty(next, STRIPPED_FLAG, { value: true });
+      el.dispatchEvent(next);
+    },
+    { capture: true, signal },
+  );
+
   const safeCommitStuckComposition = () => {
     if (composing) return;
 
@@ -121,7 +224,6 @@ export function attachImeCompositionGuard(field: MathfieldElement): () => void {
     const residual = el ? sinkPlainText(el).trim() : "";
     if (!atom && !residual) return;
 
-    // Require a short idle window so a just-ended update is not treated as stuck.
     if (performance.now() - lastCompositionActivity < 280) return;
 
     commitPendingComposition(field);
@@ -129,7 +231,6 @@ export function attachImeCompositionGuard(field: MathfieldElement): () => void {
     composing = false;
   };
 
-  // Canvas tap / caret move / blur — dismiss stuck state only (not live IME).
   field.addEventListener(
     "pointerdown",
     () => {
@@ -149,7 +250,6 @@ export function attachImeCompositionGuard(field: MathfieldElement): () => void {
   field.addEventListener(
     "focusout",
     () => {
-      // Leaving the field: allow a slightly longer wait then commit.
       window.setTimeout(safeCommitStuckComposition, 300);
     },
     { signal },
@@ -157,6 +257,6 @@ export function attachImeCompositionGuard(field: MathfieldElement): () => void {
 
   return () => {
     controller.abort();
-    observer?.disconnect();
+    observer.disconnect();
   };
 }
