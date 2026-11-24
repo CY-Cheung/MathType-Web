@@ -228,27 +228,29 @@ export function DefineStylesDialog({
   };
 
   const onImportFiles = async (files: FileList | null) => {
-    if (!files || files.length === 0) return;
+    if (!files || files.length === 0) {
+      setStatus("未選取檔案");
+      return;
+    }
     setBusy(true);
-    setStatus("");
+    setStatus(`正在匯入 ${files.length} 個檔案…`);
     try {
-      // Android file managers grey out .ttf when `accept` lists font MIME types —
-      // no accept attribute; filter extensions here instead.
+      // accept="*/*" + extension OR sfnt/WOFF magic (Android may strip .ttf).
       const { added, skipped } = await importLocalFontFiles(files);
       await refreshLocal();
       onLocalFontsChange?.();
       const parts: string[] = [];
       if (added.length > 0) {
         parts.push(`已匯入 ${added.length} 個字體（僅存於此瀏覽器）`);
-      } else if (skipped.length === 0) {
-        parts.push("未匯入（請選擇 .ttf / .otf / .woff / .woff2）");
       } else {
-        parts.push("僅支援 .ttf / .otf / .woff / .woff2");
+        parts.push(
+          "未匯入 · 僅支援字體檔（.ttf / .otf / .woff / .woff2）或有效字體二進制",
+        );
       }
       if (skipped.length > 0) {
         const names = skipped.slice(0, 3).join("、");
         const more = skipped.length > 3 ? ` 等 ${skipped.length} 個` : "";
-        parts.push(`已略過：${names}${more}`);
+        parts.push(`已略過（非字體）：${names}${more}`);
       }
       setStatus(parts.join(" · "));
     } catch {
@@ -443,22 +445,24 @@ export function DefineStylesDialog({
                   <code className="text-[10px]">eucsym.ttf</code>）。
                 </p>
                 <div className="mb-2 flex flex-wrap items-center gap-2">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    className="sr-only"
-                    data-testid="local-fonts-input"
-                    onChange={(event) => void onImportFiles(event.target.files)}
-                  />
-                  <button
-                    type="button"
-                    className="h-[26px] border border-[#6a6a6a] bg-[#e8e8e8] px-2 text-[12px] font-semibold hover:bg-white disabled:opacity-50"
-                    disabled={busy}
-                    onClick={() => fileInputRef.current?.click()}
+                  {/* Native label + accept all MIME so Android opens picker without greying fonts. */}
+                  <label
+                    className={`inline-flex h-[26px] cursor-pointer items-center border border-[#6a6a6a] bg-[#e8e8e8] px-2 text-[12px] font-semibold hover:bg-white ${
+                      busy ? "pointer-events-none opacity-50" : ""
+                    }`}
                   >
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="*/*"
+                      multiple
+                      className="sr-only"
+                      data-testid="local-fonts-input"
+                      disabled={busy}
+                      onChange={(event) => void onImportFiles(event.target.files)}
+                    />
                     匯入字體…
-                  </button>
+                  </label>
                   <button
                     type="button"
                     className="h-[26px] border border-[#9a9a9a] bg-[#f7f7f7] px-2 text-[12px] hover:bg-white disabled:opacity-50"
@@ -467,11 +471,14 @@ export function DefineStylesDialog({
                   >
                     清除全部
                   </button>
-                  {status ? (
-                    <span className="text-[10px] text-[#333]" role="status">
-                      {status}
-                    </span>
-                  ) : null}
+                </div>
+                <div
+                  className="mb-2 min-h-[1.25rem] text-[11px] leading-snug text-[#222]"
+                  role="status"
+                  aria-live="polite"
+                  data-testid="local-fonts-status"
+                >
+                  {status || "\u00a0"}
                 </div>
                 {localFonts.length === 0 ? (
                   <div className="text-[11px] text-[#777]">尚未匯入本機字體</div>
