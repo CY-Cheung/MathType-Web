@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import {
   applyPrimaryFont,
   cloneStyles,
@@ -11,29 +11,43 @@ import {
   type DefineStylesPrefs,
   type StyleFace,
 } from "../types/defineStyles";
+import {
+  clearLocalFonts,
+  deleteLocalFont,
+  importLocalFontFiles,
+  listLocalFontFamilies,
+  listLocalFonts,
+  type LocalFontMeta,
+} from "../utils/localFontsDb";
 
 type DefineStylesDialogProps = {
   prefs: DefineStylesPrefs;
   /** Second arg: persist to localStorage ("Use for new equations"). */
   onCommit: (prefs: DefineStylesPrefs, persist: boolean) => void;
   onClose: () => void;
+  /** Bump canvas / export when IndexedDB fonts change. */
+  onLocalFontsChange?: () => void;
 };
 
 /**
  * Native `<select>` so Android opens the OS picker on tap (no soft keyboard).
- * Preset list + Custom… prompt for free-form faces.
+ * Preset list + IndexedDB local families + Custom… prompt.
  */
 function FontSelect({
   id,
   value,
+  localFamilies,
   onChange,
 }: {
   id: string;
   value: string;
+  localFamilies: readonly string[];
   onChange: (font: string) => void;
 }) {
-  const known = (COMMON_FONT_PRESETS as readonly string[]).includes(value);
-  // Keep the free-form face selected by its real name; Custom… only triggers a prompt.
+  const presetSet = new Set<string>(COMMON_FONT_PRESETS as readonly string[]);
+  const extras = localFamilies.filter((name) => !presetSet.has(name));
+  const known =
+    presetSet.has(value) || localFamilies.includes(value) || extras.includes(value);
   const selectValue = known || value ? value : COMMON_FONT_PRESETS[0];
 
   return (
@@ -57,6 +71,11 @@ function FontSelect({
       {COMMON_FONT_PRESETS.map((name) => (
         <option key={name} value={name}>
           {name}
+        </option>
+      ))}
+      {extras.map((name) => (
+        <option key={`local-${name}`} value={name}>
+          {name} (local)
         </option>
       ))}
       <option value={CUSTOM_FONT_OPTION}>Custom…</option>
@@ -122,15 +141,44 @@ function ActionButtons({
   );
 }
 
-/** MathType 6.9b–style Define Styles (Simple / Advanced). */
-export function DefineStylesDialog({ prefs, onCommit, onClose }: DefineStylesDialogProps) {
+function faceLabel(meta: LocalFontMeta): string {
+  const weight = meta.weight === "700" ? "Bold" : "Regular";
+  const style = meta.style === "italic" ? " Italic" : "";
+  return `${weight}${style}`;
+}
+
+/** MathType 6.9b–style Define Styles (Simple / Advanced) + local font imports. */
+export function DefineStylesDialog({
+  prefs,
+  onCommit,
+  onClose,
+  onLocalFontsChange,
+}: DefineStylesDialogProps) {
   const titleId = useId();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [draft, setDraft] = useState<DefineStylesPrefs>(() => ({
     version: 2,
     mode: prefs.mode,
     styles: cloneStyles(prefs.styles),
   }));
   const [useForNew, setUseForNew] = useState(true);
+  const [localFonts, setLocalFonts] = useState<LocalFontMeta[]>([]);
+  const [localFamilies, setLocalFamilies] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState("");
+
+  const refreshLocal = useCallback(async () => {
+    const [metas, families] = await Promise.all([
+      listLocalFonts(),
+      listLocalFontFamilies(),
+    ]);
+    setLocalFonts(metas);
+    setLocalFamilies(families);
+  }, []);
+
+  useEffect(() => {
+    void refreshLocal();
+  }, [refreshLocal]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -177,6 +225,52 @@ export function DefineStylesDialog({ prefs, onCommit, onClose }: DefineStylesDia
   const ok = () => {
     commitDraft();
     onClose();
+  };
+
+  const onImportFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setBusy(true);
+    setStatus("");
+    try {
+      const added = await importLocalFontFiles(files);
+      await refreshLocal();
+      onLocalFontsChange?.();
+      setStatus(
+        added.length > 0
+          ? `已匯入 ${added.length} 個字體（僅存於此瀏覽器）`
+          : "未匯入（請選擇 .ttf / .otf / .woff / .woff2）",
+      );
+    } catch {
+      setStatus("匯入失敗（IndexedDB 不可用或配額不足）");
+    } finally {
+      setBusy(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const onDeleteOne = async (id: string) => {
+    setBusy(true);
+    try {
+      await deleteLocalFont(id);
+      await refreshLocal();
+      onLocalFontsChange?.();
+      setStatus("已刪除字體");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onClearAll = async () => {
+    if (!window.confirm("清除此瀏覽器內全部本機匯入字體？")) return;
+    setBusy(true);
+    try {
+      await clearLocalFonts();
+      await refreshLocal();
+      onLocalFontsChange?.();
+      setStatus("已清除全部本機字體");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const primary: StyleFace = {
@@ -239,98 +333,182 @@ export function DefineStylesDialog({ prefs, onCommit, onClose }: DefineStylesDia
           Define Styles
         </h2>
 
-        {/* sm+: side-by-side; <640px: stack table above actions */}
-        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden px-3 pt-3 sm:flex-row">
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-            <div className="mb-2 flex shrink-0 items-center gap-4">
-              <label className="flex items-center gap-1.5">
-                <input
-                  type="radio"
-                  name="define-styles-mode"
-                  checked={draft.mode === "simple"}
-                  onChange={() => setMode("simple")}
-                />
-                Simple
-              </label>
-              <label className="flex items-center gap-1.5">
-                <input
-                  type="radio"
-                  name="define-styles-mode"
-                  checked={draft.mode === "advanced"}
-                  onChange={() => setMode("advanced")}
-                />
-                Advanced
-              </label>
-            </div>
+        {/* Scrollable body so 390px phones can reach Local Fonts + actions */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+          <div className="flex min-h-0 flex-col gap-3 px-3 pt-3 sm:flex-row">
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+              <div className="mb-2 flex shrink-0 items-center gap-4">
+                <label className="flex items-center gap-1.5">
+                  <input
+                    type="radio"
+                    name="define-styles-mode"
+                    checked={draft.mode === "simple"}
+                    onChange={() => setMode("simple")}
+                  />
+                  Simple
+                </label>
+                <label className="flex items-center gap-1.5">
+                  <input
+                    type="radio"
+                    name="define-styles-mode"
+                    checked={draft.mode === "advanced"}
+                    onChange={() => setMode("advanced")}
+                  />
+                  Advanced
+                </label>
+              </div>
 
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden border border-[#a0a0a0] bg-[#f7f7f7]">
-              <div className="shrink-0 overflow-x-auto">
-                <div className="grid min-w-[22rem] grid-cols-[6.5rem_minmax(7.5rem,1fr)_2.75rem_2.75rem] gap-x-1 border-b border-[#c8c8c8] bg-[#ebebeb] px-2 py-1 text-[11px] font-semibold text-[#333] sm:grid-cols-[7.25rem_minmax(0,1fr)_3.25rem_3.25rem]">
-                  <div>Style</div>
-                  <div>Font</div>
-                  <div className="col-span-2 text-center">Character Style</div>
-                  <div />
-                  <div />
-                  <div className="text-center font-normal">Bold</div>
-                  <div className="text-center font-normal">Italic</div>
+              <div className="flex max-h-[40dvh] min-h-0 flex-col overflow-hidden border border-[#a0a0a0] bg-[#f7f7f7] sm:max-h-[min(50dvh,22rem)]">
+                <div className="shrink-0 overflow-x-auto">
+                  <div className="grid min-w-[22rem] grid-cols-[6.5rem_minmax(7.5rem,1fr)_2.75rem_2.75rem] gap-x-1 border-b border-[#c8c8c8] bg-[#ebebeb] px-2 py-1 text-[11px] font-semibold text-[#333] sm:grid-cols-[7.25rem_minmax(0,1fr)_3.25rem_3.25rem]">
+                    <div>Style</div>
+                    <div>Font</div>
+                    <div className="col-span-2 text-center">Character Style</div>
+                    <div />
+                    <div />
+                    <div className="text-center font-normal">Bold</div>
+                    <div className="text-center font-normal">Italic</div>
+                  </div>
+                </div>
+
+                <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto px-2 py-1">
+                  {rows.map((row) => {
+                    const fontId = `ds-font-${row.id}`;
+                    return (
+                      <div
+                        key={row.id}
+                        className="grid min-w-[22rem] grid-cols-[6.5rem_minmax(7.5rem,1fr)_2.75rem_2.75rem] items-center gap-x-1 py-0.5 sm:grid-cols-[7.25rem_minmax(0,1fr)_3.25rem_3.25rem]"
+                      >
+                        <div
+                          className="min-w-[5.5rem] truncate pr-1 text-[12px]"
+                          title={row.label}
+                        >
+                          {row.label}
+                        </div>
+                        <FontSelect
+                          id={fontId}
+                          value={row.face.font}
+                          localFamilies={localFamilies}
+                          onChange={(font) => row.onChange({ ...row.face, font })}
+                        />
+                        <div className="flex min-w-[2.5rem] justify-center">
+                          <input
+                            type="checkbox"
+                            checked={row.face.bold}
+                            aria-label={`${row.label} Bold`}
+                            onChange={(event) =>
+                              row.onChange({ ...row.face, bold: event.target.checked })
+                            }
+                          />
+                        </div>
+                        <div className="flex min-w-[2.5rem] justify-center">
+                          <input
+                            type="checkbox"
+                            checked={row.face.italic}
+                            aria-label={`${row.label} Italic`}
+                            onChange={(event) =>
+                              row.onChange({ ...row.face, italic: event.target.checked })
+                            }
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
-              <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto px-2 py-1">
-                {rows.map((row) => {
-                  const fontId = `ds-font-${row.id}`;
-                  return (
-                    <div
-                      key={row.id}
-                      className="grid min-w-[22rem] grid-cols-[6.5rem_minmax(7.5rem,1fr)_2.75rem_2.75rem] items-center gap-x-1 py-0.5 sm:grid-cols-[7.25rem_minmax(0,1fr)_3.25rem_3.25rem]"
-                    >
-                      <div className="min-w-[5.5rem] truncate pr-1 text-[12px]" title={row.label}>
-                        {row.label}
-                      </div>
-                      <FontSelect
-                        id={fontId}
-                        value={row.face.font}
-                        onChange={(font) => row.onChange({ ...row.face, font })}
-                      />
-                      <div className="flex min-w-[2.5rem] justify-center">
-                        <input
-                          type="checkbox"
-                          checked={row.face.bold}
-                          aria-label={`${row.label} Bold`}
-                          onChange={(event) =>
-                            row.onChange({ ...row.face, bold: event.target.checked })
-                          }
-                        />
-                      </div>
-                      <div className="flex min-w-[2.5rem] justify-center">
-                        <input
-                          type="checkbox"
-                          checked={row.face.italic}
-                          aria-label={`${row.label} Italic`}
-                          onChange={(event) =>
-                            row.onChange({ ...row.face, italic: event.target.checked })
-                          }
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              {/* Local Fonts — browser IndexedDB only */}
+              <section
+                className="mt-3 shrink-0 border border-[#a0a0a0] bg-[#f7f7f7] p-2"
+                data-testid="local-fonts-panel"
+              >
+                <div className="mb-1 text-[12px] font-semibold text-[#222]">
+                  Local Fonts（僅存於此瀏覽器，不會上傳）
+                </div>
+                <p className="mb-2 text-[10px] leading-snug text-[#666]">
+                  僅匯入標準拉丁／Unicode 字體。切勿匯入舊式非 Unicode 符號字體（如{" "}
+                  <code className="text-[10px]">symbol.ttf</code>、
+                  <code className="text-[10px]">eucsym.ttf</code>）。
+                </p>
+                <div className="mb-2 flex flex-wrap items-center gap-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".ttf,.otf,.woff,.woff2,font/ttf,font/otf,font/woff,font/woff2"
+                    multiple
+                    className="sr-only"
+                    data-testid="local-fonts-input"
+                    onChange={(event) => void onImportFiles(event.target.files)}
+                  />
+                  <button
+                    type="button"
+                    className="h-[26px] border border-[#6a6a6a] bg-[#e8e8e8] px-2 text-[12px] font-semibold hover:bg-white disabled:opacity-50"
+                    disabled={busy}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    匯入字體…
+                  </button>
+                  <button
+                    type="button"
+                    className="h-[26px] border border-[#9a9a9a] bg-[#f7f7f7] px-2 text-[12px] hover:bg-white disabled:opacity-50"
+                    disabled={busy || localFonts.length === 0}
+                    onClick={() => void onClearAll()}
+                  >
+                    清除全部
+                  </button>
+                  {status ? (
+                    <span className="text-[10px] text-[#333]" role="status">
+                      {status}
+                    </span>
+                  ) : null}
+                </div>
+                {localFonts.length === 0 ? (
+                  <div className="text-[11px] text-[#777]">尚未匯入本機字體</div>
+                ) : (
+                  <ul className="max-h-[8rem] space-y-1 overflow-y-auto text-[11px]">
+                    {localFonts.map((meta) => (
+                      <li
+                        key={meta.id}
+                        className="flex items-start justify-between gap-2 border border-[#d8d8d8] bg-white px-1.5 py-1"
+                        data-testid="local-font-row"
+                        data-family={meta.family}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate font-medium" title={meta.fileName}>
+                            {meta.fileName}
+                          </div>
+                          <div className="text-[#555]">
+                            {meta.family} · {faceLabel(meta)}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          className="shrink-0 border border-[#9a9a9a] bg-[#f7f7f7] px-1.5 py-0.5 text-[11px] hover:bg-white"
+                          disabled={busy}
+                          onClick={() => void onDeleteOne(meta.id)}
+                        >
+                          刪除
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            </div>
+
+            <div className="hidden w-[7.25rem] shrink-0 flex-col gap-1.5 pt-6 sm:flex">
+              <ActionButtons {...actionProps} />
             </div>
           </div>
 
-          {/* Desktop: right column. Mobile: full-width actions under the table. */}
-          <div className="hidden w-[7.25rem] shrink-0 flex-col gap-1.5 pt-6 sm:flex">
+          <div className="grid shrink-0 grid-cols-2 gap-1.5 border-t border-[#c8c8c8] px-3 pt-2 sm:hidden">
             <ActionButtons {...actionProps} />
           </div>
-          <div className="grid shrink-0 grid-cols-2 gap-1.5 border-t border-[#c8c8c8] pt-2 sm:hidden">
-            <ActionButtons {...actionProps} />
-          </div>
-        </div>
 
-        <div className="shrink-0 px-3 pb-3 pt-2 text-[10px] leading-snug text-[#666]">
-          Text / Text (FE) 預設非斜體；Variable／L.C. Greek／U.C. Greek 預設斜體；Vector-Matrix
-          預設粗體。設定寫入 localStorage，並同步至工具列、畫布與匯出。
+          <div className="shrink-0 px-3 pb-3 pt-2 text-[10px] leading-snug text-[#666]">
+            Text / Text (FE) 預設非斜體；Variable／L.C. Greek／U.C. Greek 預設斜體；Vector-Matrix
+            預設粗體。設定寫入 localStorage；本機字體寫入 IndexedDB，並同步至工具列、畫布與匯出。
+          </div>
         </div>
       </div>
     </div>

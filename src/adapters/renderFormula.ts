@@ -6,6 +6,11 @@ import { ensureTexGyreTermesFonts } from "../styles/tex-gyre-termes";
 import "./export-formula.css";
 import { MT_FONT_LOAD_SPECS, MT_FONT_STACK } from "../styles/fontStack";
 import {
+  getLocalFontEmbedCss,
+  loadLocalFontsIntoDocument,
+  warmLocalFonts,
+} from "../utils/localFontsDb";
+import {
   defineSizesInlineVars,
   readDefineSizesPrefs,
   resolveSizeSlotPt,
@@ -93,6 +98,9 @@ async function waitForFonts(): Promise<void> {
   if (typeof document === "undefined" || !document.fonts) return;
   ensureStixTwoFonts();
   ensureTexGyreTermesFonts();
+  await loadLocalFontsIntoDocument().catch(() => {
+    /* IndexedDB may be blocked */
+  });
   await document.fonts.ready;
   const prefs = readDefineStylesPrefs();
   const fontPt = exportFontPt();
@@ -100,21 +108,34 @@ async function waitForFonts(): Promise<void> {
     ...BASE_EXPORT_FONT_LOAD_SPECS,
     ...fontLoadSpecsForDefineStyles(prefs, fontPt),
   ];
-  await Promise.all(
-    specs.map((spec) => document.fonts.load(spec).catch(() => [] as FontFace[])),
-  );
+  await Promise.all([
+    ...specs.map((spec) => document.fonts.load(spec).catch(() => [] as FontFace[])),
+    warmLocalFonts(fontPt).catch(() => undefined),
+  ]);
+}
+
+/** Family names referenced by the current Define Styles prefs. */
+function familiesUsedInDefineStyles(): string[] {
+  try {
+    const prefs = readDefineStylesPrefs();
+    return [...new Set(Object.values(prefs.styles).map((face) => face.font.trim()))];
+  } catch {
+    return [];
+  }
 }
 
 /**
- * STIX Two Base64 `@font-face` plus html-to-image auto-embed (KaTeX etc.).
- * Guarantees Android PNG export does not fall back to a system sans.
+ * Local IndexedDB fonts + STIX Two Base64 `@font-face` + html-to-image auto-embed.
+ * Local embed is limited to families used by Define Styles (memory).
  */
 async function resolveExportFontEmbedCss(node: HTMLElement): Promise<string> {
-  const [stix, auto] = await Promise.all([
+  const used = familiesUsedInDefineStyles();
+  const [local, stix, auto] = await Promise.all([
+    getLocalFontEmbedCss(used).catch(() => ""),
     getStixTwoFontEmbedCss().catch(() => ""),
     getFontEmbedCSS(node).catch(() => ""),
   ]);
-  return [stix, auto].filter(Boolean).join("\n");
+  return [local, stix, auto].filter(Boolean).join("\n");
 }
 
 /** Off-screen MathLive markup at Full pt, ready for raster / SVG capture. */
