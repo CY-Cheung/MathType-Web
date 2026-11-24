@@ -386,6 +386,9 @@ export default function App() {
             setStylesEpoch((n) => n + 1);
             showToast("Styles applied");
           }}
+          onLocalFontsChange={() => {
+            setStylesEpoch((n) => n + 1);
+          }}
           onClose={() => setStylesOpen(false)}
         />
       ) : null}

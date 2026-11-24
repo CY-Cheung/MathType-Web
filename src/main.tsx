@@ -7,6 +7,7 @@ import { ensureStixTwoFonts } from "./styles/stix-two";
 import { ensureTexGyreTermesFonts } from "./styles/tex-gyre-termes";
 import "./styles/mathtype-10pt.css";
 import { readDefineStylesPrefs, syncDefineStylesToRoot } from "./types/defineStyles";
+import { loadLocalFontsIntoDocument } from "./utils/localFontsDb";
 
 ensureStixTwoFonts();
 ensureTexGyreTermesFonts();
@@ -19,6 +20,11 @@ const root = document.getElementById("root");
 if (!root) {
   throw new Error("Missing #root");
 }
+
+// IndexedDB local fonts (Euclid / TNR imports) — non-blocking before first paint.
+void loadLocalFontsIntoDocument().catch(() => {
+  /* private mode / quota */
+});
 
 createRoot(root).render(
   <StrictMode>

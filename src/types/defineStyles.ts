@@ -117,7 +117,7 @@ export function fontStackFor(font: string): string {
   if (lower === "times new roman") {
     return `"Times New Roman", "STIX Two Text", serif`;
   }
-  // Local MathType Euclid only — never fetch /fonts/euclid.*; fall through to TNR/STIX.
+  // Local MathType Euclid (system or IndexedDB import) — never fetch /fonts/euclid.*.
   if (lower === "euclid") {
     return `"Euclid", "Times New Roman", "STIX Two Text", "STIX Two Math", serif`;
   }
