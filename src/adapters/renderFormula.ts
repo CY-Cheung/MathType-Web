@@ -19,6 +19,7 @@ import {
   fontStackFor,
   readDefineStylesPrefs,
 } from "../types/defineStyles";
+import { prepareMatrixLatexForExport } from "../core/matrixFrac";
 import { defaultStylePreset } from "../types/preset";
 import {
   bytesToPngDataUrl,
@@ -144,7 +145,10 @@ export async function mountExportNode(latex: string): Promise<HTMLElement> {
     "line-height:normal",
     "vertical-align:baseline",
   ].join(";");
-  node.innerHTML = convertLatexToMarkup(latex, {
+  // Matrix cells are textstyle — upgrade bare `\frac` → `\dfrac` and ensure
+  // row skips so full-size numerators/denominators do not collide in Word PNG.
+  const exportLatex = prepareMatrixLatexForExport(latex);
+  node.innerHTML = convertLatexToMarkup(exportLatex, {
     defaultMode: "math",
     letterShapeStyle: "tex",
   });

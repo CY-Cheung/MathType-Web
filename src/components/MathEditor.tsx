@@ -70,6 +70,17 @@ export const MATHFIELD_SHADOW_CSS = `
   text-decoration: none !important;
 }
 ${buildDefineStylesMappedCss("")}
+/* Matrix air for \\dfrac cells (Define Spacing CSS vars). */
+.ML__mtable .ML__arraycolsep {
+  width: calc(var(--mt-matrix-col-gap, 1.2em) * 0.4) !important;
+  min-width: calc(var(--mt-matrix-col-gap, 1.2em) * 0.4) !important;
+}
+.ML__mtable .col-align-c,
+.ML__mtable .col-align-l,
+.ML__mtable .col-align-r {
+  padding-top: calc(var(--mt-matrix-row-gap, 1em) * 0.28);
+  padding-bottom: calc(var(--mt-matrix-row-gap, 1em) * 0.28);
+}
 /* MathLive 0.111 draws \\placeholder{} as U+25A2 on span.ML__cmr. */
 .mt-empty-slot {
   display: inline-block;

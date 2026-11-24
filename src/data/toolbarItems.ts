@@ -284,32 +284,32 @@ export const templatePalettes: ToolbarPalette[] = [
       item(
         "matrix2",
         "2×2",
-        "\\begin{pmatrix}#?&#?\\\\#?&#?\\end{pmatrix}",
+        "\\begin{pmatrix}#?&#?\\\\[0.85em]#?&#?\\end{pmatrix}",
         "2 by 2 matrix",
       ),
       item(
         "matrix3",
         "3×3",
-        "\\begin{pmatrix}#?&#?&#?\\\\#?&#?&#?\\\\#?&#?&#?\\end{pmatrix}",
+        "\\begin{pmatrix}#?&#?&#?\\\\[0.85em]#?&#?&#?\\\\[0.85em]#?&#?&#?\\end{pmatrix}",
         "3 by 3 matrix",
       ),
       // Piecewise / system: left brace only around a multi-row array.
       item(
         "cases-left-2",
         "{ 2",
-        "\\left\\{\\begin{array}{ll}#?&#?\\\\#?&#?\\end{array}\\right.",
+        "\\left\\{\\begin{array}{ll}#?&#?\\\\[0.85em]#?&#?\\end{array}\\right.",
         "Left brace · 2-row piecewise",
       ),
       item(
         "cases-left-3",
         "{ 3",
-        "\\left\\{\\begin{array}{ll}#?&#?\\\\#?&#?\\\\#?&#?\\end{array}\\right.",
+        "\\left\\{\\begin{array}{ll}#?&#?\\\\[0.85em]#?&#?\\\\[0.85em]#?&#?\\end{array}\\right.",
         "Left brace · 3-row piecewise",
       ),
       item(
         "cases-right-2",
         "2 }",
-        "\\left.\\begin{array}{ll}#?&#?\\\\#?&#?\\end{array}\\right\\}",
+        "\\left.\\begin{array}{ll}#?&#?\\\\[0.85em]#?&#?\\end{array}\\right\\}",
         "Right brace · 2-row piecewise",
       ),
     ],
