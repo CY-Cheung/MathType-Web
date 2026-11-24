@@ -6,10 +6,12 @@
 
 :root {
   /* Define Styles — JS syncDefineStylesToRoot() overwrites these live. */
-  --mt-ds-variable-font: "Times New Roman", "TeX Gyre Termes", "Liberation Serif", Times, serif;
+  --mt-ds-variable-font: "Times New Roman", "STIX Two Text", serif;
   --mt-ds-variable-weight: 400;
   --mt-ds-variable-style: italic;
-  --mt-ds-text-font: "Times New Roman", "TeX Gyre Termes", "Liberation Serif", Times, serif;
+  --mt-ds-text-font: "Times New Roman", "STIX Two Text", serif;
+  --mt-ds-lcGreek-font: "Times New Roman", "STIX Two Text", serif;
+  --mt-ds-ucGreek-font: "Times New Roman", "STIX Two Text", serif;
   --mt-ds-text-weight: 400;
   --mt-ds-text-style: normal;
   --mt-ds-textFe-font: "PMingLiU", "新細明體", MingLiU, serif;

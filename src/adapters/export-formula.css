@@ -70,7 +70,7 @@
 .mt-export-formula .mt-ds-lcGreek,
 .mt-export-formula .mt-ds-lcGreek .ML__mathit,
 .mt-export-formula .mt-ds-lcGreek .ML__cmr {
-  font-family: var(--mt-ds-lcGreek-font, Symbol, serif) !important;
+  font-family: var(--mt-ds-lcGreek-font, var(--mt-ds-variable-font, "Times New Roman", "STIX Two Text", serif)) !important;
   font-weight: var(--mt-ds-lcGreek-weight, 400) !important;
   font-style: var(--mt-ds-lcGreek-style, italic) !important;
 }
@@ -79,9 +79,24 @@
 .mt-export-formula .mt-ds-ucGreek .ML__mathit,
 .mt-export-formula .mt-ds-ucGreek .ML__cmr,
 .mt-export-formula .mt-ds-ucGreek .ML__mathbf {
-  font-family: var(--mt-ds-ucGreek-font, Symbol, serif) !important;
+  font-family: var(--mt-ds-ucGreek-font, var(--mt-ds-variable-font, "Times New Roman", "STIX Two Text", serif)) !important;
   font-weight: var(--mt-ds-ucGreek-weight, 400) !important;
   font-style: var(--mt-ds-ucGreek-style, italic) !important;
+}
+
+/* Letter-face force — mirror shadow DOM (never KaTeX_Math / Symbol for letters).
+   Placed after mapped rules; .lcGreek.ML__mathit stays more specific above. */
+.mt-export-formula .ML__mathit,
+.mt-export-formula .ML__mathbfit,
+.mt-export-formula .ML__main {
+  font-family: var(--mt-ds-variable-font, "Times New Roman", "STIX Two Text", serif) !important;
+}
+.mt-export-formula .ML__cmr {
+  font-family: var(--mt-ds-number-font, var(--mt-ds-variable-font, "Times New Roman", "STIX Two Text", serif)) !important;
+}
+.mt-export-formula .lcGreek,
+.mt-export-formula .lcGreek.ML__mathit {
+  font-family: var(--mt-ds-lcGreek-font, var(--mt-ds-variable-font, "Times New Roman", "STIX Two Text", serif)) !important;
 }
 
 /* Define Spacing — mirrored from :root / inline vars on the export host. */
