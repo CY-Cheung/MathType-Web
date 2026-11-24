@@ -1,6 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import type { MathfieldElement } from "mathlive";
 import { attachAndroidBackspaceBridge } from "../adapters/androidBackspaceBridge";
+import { inlineShortcutsForPlatform } from "../adapters/androidFnShortcuts";
 import { commitPendingComposition } from "../adapters/commitComposition";
 import { attachImeCompositionGuard } from "../adapters/imeCompositionGuard";
 import {
@@ -215,6 +216,15 @@ export const MathEditor = forwardRef<MathEditorHandle, MathEditorProps>(
       field.menuItems = [];
       field.letterShapeStyle = "tex";
       field.defaultMode = "math";
+      // Android + Samsung IME: drop letter-function inlineShortcuts (`tan`→`\tan`)
+      // so mid-composition conversion cannot leave `\tan tanx`. Desktop unchanged.
+      try {
+        field.inlineShortcuts = inlineShortcutsForPlatform({
+          ...field.inlineShortcuts,
+        });
+      } catch {
+        /* inlineShortcuts may be frozen on some builds */
+      }
       // Prevent MathLive prose auto-flips that leave Active Style stuck on Text.
       field.smartMode = false;
       // Empty-canvas hint is a CSS overlay (`data-empty`) — MathLive's latex
