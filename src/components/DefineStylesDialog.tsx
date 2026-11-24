@@ -232,18 +232,30 @@ export function DefineStylesDialog({
     setBusy(true);
     setStatus("");
     try {
-      const added = await importLocalFontFiles(files);
+      // Android file managers grey out .ttf when `accept` lists font MIME types —
+      // no accept attribute; filter extensions here instead.
+      const { added, skipped } = await importLocalFontFiles(files);
       await refreshLocal();
       onLocalFontsChange?.();
-      setStatus(
-        added.length > 0
-          ? `已匯入 ${added.length} 個字體（僅存於此瀏覽器）`
-          : "未匯入（請選擇 .ttf / .otf / .woff / .woff2）",
-      );
+      const parts: string[] = [];
+      if (added.length > 0) {
+        parts.push(`已匯入 ${added.length} 個字體（僅存於此瀏覽器）`);
+      } else if (skipped.length === 0) {
+        parts.push("未匯入（請選擇 .ttf / .otf / .woff / .woff2）");
+      } else {
+        parts.push("僅支援 .ttf / .otf / .woff / .woff2");
+      }
+      if (skipped.length > 0) {
+        const names = skipped.slice(0, 3).join("、");
+        const more = skipped.length > 3 ? ` 等 ${skipped.length} 個` : "";
+        parts.push(`已略過：${names}${more}`);
+      }
+      setStatus(parts.join(" · "));
     } catch {
       setStatus("匯入失敗（IndexedDB 不可用或配額不足）");
     } finally {
       setBusy(false);
+      // Reset so re-picking the same file after delete still fires onChange.
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
@@ -434,7 +446,6 @@ export function DefineStylesDialog({
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept=".ttf,.otf,.woff,.woff2,font/ttf,font/otf,font/woff,font/woff2"
                     multiple
                     className="sr-only"
                     data-testid="local-fonts-input"

@@ -244,13 +244,37 @@ export async function addLocalFontFromFile(file: File): Promise<LocalFontMeta> {
   return toMeta(record);
 }
 
-export async function importLocalFontFiles(files: FileList | File[]): Promise<LocalFontMeta[]> {
-  const list = [...files].filter((f) => /\.(ttf|otf|woff2?)$/i.test(f.name));
+/** Allowed font extensions (case-insensitive). Used after Android pickers ignore `accept`. */
+export const LOCAL_FONT_EXT_RE = /\.(ttf|otf|woff2?)$/i;
+
+export function isSupportedLocalFontFileName(fileName: string): boolean {
+  return LOCAL_FONT_EXT_RE.test(fileName.replace(/^.*[/\\]/, ""));
+}
+
+export type LocalFontImportResult = {
+  added: LocalFontMeta[];
+  /** File names skipped because the extension is not a supported font. */
+  skipped: string[];
+};
+
+export async function importLocalFontFiles(
+  files: FileList | File[],
+): Promise<LocalFontImportResult> {
+  const all = [...files];
+  const skipped: string[] = [];
+  const list: File[] = [];
+  for (const file of all) {
+    if (isSupportedLocalFontFileName(file.name)) {
+      list.push(file);
+    } else {
+      skipped.push(file.name.replace(/^.*[/\\]/, "") || file.name);
+    }
+  }
   const added: LocalFontMeta[] = [];
   for (const file of list) {
     added.push(await addLocalFontFromFile(file));
   }
-  return added;
+  return { added, skipped };
 }
 
 export async function deleteLocalFont(id: string): Promise<void> {
