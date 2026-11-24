@@ -58,6 +58,8 @@ export const DEFINE_STYLE_ORDER: readonly DefineStyleMeta[] = [
 /** Common faces offered in the Font `<select>` (Custom… for free-form names). */
 export const COMMON_FONT_PRESETS: readonly string[] = [
   "Times New Roman",
+  "STIX Two Text",
+  "STIX Two Math",
   "TeX Gyre Termes",
   "PMingLiU",
   "MingLiU",
@@ -109,8 +111,18 @@ export function isDefineStyleId(value: unknown): value is DefineStyleId {
 export function fontStackFor(font: string): string {
   const name = font.trim() || "Times New Roman";
   const lower = name.toLowerCase();
-  if (lower === "times new roman" || lower === "tex gyre termes") {
-    return `"${name}", "TeX Gyre Termes", "Times New Roman", "Liberation Serif", Times, serif`;
+  // Windows: local TNR; Android / missing TNR → self-hosted STIX Two Text.
+  if (lower === "times new roman") {
+    return `"Times New Roman", "STIX Two Text", "STIX Two Math", serif`;
+  }
+  if (lower === "stix two text") {
+    return `"STIX Two Text", "Times New Roman", "STIX Two Math", serif`;
+  }
+  if (lower === "tex gyre termes") {
+    return `"TeX Gyre Termes", "Times New Roman", "STIX Two Text", "STIX Two Math", serif`;
+  }
+  if (lower === "stix two math") {
+    return `"STIX Two Math", "STIX Two Text", "Times New Roman", serif`;
   }
   if (lower === "courier new" || lower === "courier") {
     return `"${name}", Courier, monospace`;
@@ -119,12 +131,13 @@ export function fontStackFor(font: string): string {
     return `"${name}", "PMingLiU", "新細明體", MingLiU, "Noto Serif TC", serif`;
   }
   if (lower === "symbol" || lower.includes("symbol")) {
-    return `"${name}", Symbol, "Segoe UI Symbol", "Cambria Math", serif`;
+    // Prefer STIX Two for unicode greek/operators when Symbol is absent.
+    return `"${name}", Symbol, "STIX Two Text", "STIX Two Math", "Segoe UI Symbol", "Cambria Math", serif`;
   }
   if (lower === "mt extra" || lower.includes("extra")) {
-    return `"${name}", "MT Extra", "Segoe UI Symbol", Symbol, serif`;
+    return `"${name}", "MT Extra", "STIX Two Math", "Segoe UI Symbol", Symbol, serif`;
   }
-  return `"${name}", "Times New Roman", "TeX Gyre Termes", serif`;
+  return `"${name}", "Times New Roman", "STIX Two Text", serif`;
 }
 
 export function cssWeight(bold: boolean): string {

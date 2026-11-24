@@ -67,7 +67,7 @@ export function MathMarkup({ latex, className }: MathMarkupProps) {
       className={`mt-markup pointer-events-none inline-flex items-center justify-center leading-none ${className ?? ""}`}
       style={{
         fontFamily:
-          'var(--mt-ds-variable-font, var(--mt-math-font, "Times New Roman", "TeX Gyre Termes", Times, serif))',
+          'var(--mt-ds-variable-font, var(--mt-math-font, "Times New Roman", "STIX Two Text", "STIX Two Math", serif))',
       }}
       dangerouslySetInnerHTML={{ __html: html }}
     />

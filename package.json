@@ -4,8 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "predev": "node scripts/copy-mathlive-fonts.mjs",
-    "prebuild": "node scripts/copy-mathlive-fonts.mjs",
+    "predev": "node scripts/copy-mathlive-fonts.mjs && node scripts/copy-stix-fonts.mjs",
+    "prebuild": "node scripts/copy-mathlive-fonts.mjs && node scripts/copy-stix-fonts.mjs",
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "lint": "oxlint",
@@ -20,6 +20,8 @@
     "react-dom": "^19.3.1"
   },
   "devDependencies": {
+    "@fontsource/stix-two-math": "^5.3.0",
+    "@fontsource/stix-two-text": "^5.3.0",
     "@tailwindcss/vite": "^4.3.5",
     "@types/jszip": "^3.4.0",
     "@types/node": "^24.19.2",

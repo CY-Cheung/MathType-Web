@@ -1,6 +1,7 @@
 import { convertLatexToMarkup } from "mathlive";
-import { toPng, toSvg } from "html-to-image";
+import { getFontEmbedCSS, toPng, toSvg } from "html-to-image";
 import "mathlive/static.css";
+import { ensureStixTwoFonts, getStixTwoFontEmbedCss } from "../styles/stix-two";
 import { ensureTexGyreTermesFonts } from "../styles/tex-gyre-termes";
 import "./export-formula.css";
 import { MT_FONT_LOAD_SPECS, MT_FONT_STACK } from "../styles/fontStack";
@@ -79,7 +80,7 @@ export function depthToValignPt(depthPx: number, heightPt = 0): number {
   return Math.round(clamped * 100) / 100;
 }
 
-/** Always warm Termes (+ TNR intercept) so Times defaults stay cross-platform. */
+/** Warm STIX Two (+ TNR intercept) so Times defaults stay cross-platform. */
 const BASE_EXPORT_FONT_LOAD_SPECS = [
   ...MT_FONT_LOAD_SPECS,
   '10pt "Times New Roman"',
@@ -90,6 +91,7 @@ const BASE_EXPORT_FONT_LOAD_SPECS = [
 
 async function waitForFonts(): Promise<void> {
   if (typeof document === "undefined" || !document.fonts) return;
+  ensureStixTwoFonts();
   ensureTexGyreTermesFonts();
   await document.fonts.ready;
   const prefs = readDefineStylesPrefs();
@@ -98,7 +100,21 @@ async function waitForFonts(): Promise<void> {
     ...BASE_EXPORT_FONT_LOAD_SPECS,
     ...fontLoadSpecsForDefineStyles(prefs, fontPt),
   ];
-  await Promise.all(specs.map((spec) => document.fonts.load(spec).catch(() => [] as FontFace[])));
+  await Promise.all(
+    specs.map((spec) => document.fonts.load(spec).catch(() => [] as FontFace[])),
+  );
+}
+
+/**
+ * STIX Two Base64 `@font-face` plus html-to-image auto-embed (KaTeX etc.).
+ * Guarantees Android PNG export does not fall back to a system sans.
+ */
+async function resolveExportFontEmbedCss(node: HTMLElement): Promise<string> {
+  const [stix, auto] = await Promise.all([
+    getStixTwoFontEmbedCss().catch(() => ""),
+    getFontEmbedCSS(node).catch(() => ""),
+  ]);
+  return [stix, auto].filter(Boolean).join("\n");
 }
 
 /** Off-screen MathLive markup at Full pt, ready for raster / SVG capture. */
@@ -261,12 +277,14 @@ export async function renderFormulaPng(
     // html-to-image sets canvas.width = (canvasWidth || width) * pixelRatio.
     // Pass CSS layout size + pixelRatio only — do NOT also pass canvasWidth×scale
     // or the bitmap becomes scale² (e.g. 16×). True 4× = vector draw at 4× DPR.
+    const fontEmbedCSS = await resolveExportFontEmbedCss(node);
     const rawDataUrl = await toPng(node, {
       pixelRatio: scale,
       width: cssWidth,
       height: cssHeight,
       backgroundColor: "transparent",
       cacheBust: true,
+      fontEmbedCSS,
       style: {
         background: "transparent",
         transform: "none",
@@ -305,10 +323,12 @@ export async function renderFormulaSvg(
 ): Promise<{ svg: string; blob: Blob }> {
   const node = await mountExportNode(latex);
   try {
+    const fontEmbedCSS = await resolveExportFontEmbedCss(node);
     const dataUrl = await toSvg(node, {
       pixelRatio: scale,
       backgroundColor: "transparent",
       cacheBust: true,
+      fontEmbedCSS,
       style: { background: "transparent" },
     });
     const svg = decodeSvgDataUrl(dataUrl);
