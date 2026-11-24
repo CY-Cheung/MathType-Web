@@ -18,6 +18,8 @@ export type MenuBarEditAction =
   | "selectAll"
   | "clear";
 
+export type MenuBarAlignAction = "left" | "center" | "right" | "eq";
+
 type MenuBarProps = {
   activeStyle: ActiveStyleId;
   zoomPercent: number;
@@ -26,6 +28,11 @@ type MenuBarProps = {
   onZoomChange: (percent: number) => void;
   onPlainImageNoLinkChange: () => void;
   onOpenDefineStyles: () => void;
+  onOpenDefineSizes: () => void;
+  onOpenDefineSpacing: () => void;
+  onOpenMatrix: () => void;
+  onAlign: (action: MenuBarAlignAction) => void;
+  onOpenShortcutsHelp: () => void;
   onEdit: (action: MenuBarEditAction) => void;
   onExportMathMl: () => void;
 };
@@ -159,6 +166,11 @@ export function MenuBar({
   onZoomChange,
   onPlainImageNoLinkChange,
   onOpenDefineStyles,
+  onOpenDefineSizes,
+  onOpenDefineSpacing,
+  onOpenMatrix,
+  onAlign,
+  onOpenShortcutsHelp,
   onEdit,
   onExportMathMl,
 }: MenuBarProps) {
@@ -288,9 +300,47 @@ export function MenuBar({
       id: "format",
       label: "Format",
       items: [
+        {
+          kind: "action",
+          id: "format-matrix",
+          label: "Matrix…",
+          shortcut: "Ctrl+M",
+          onSelect: () => run(onOpenMatrix),
+        },
+        { kind: "separator", id: "format-sep-1" },
+        {
+          kind: "action",
+          id: "align-left",
+          label: "Align Left",
+          onSelect: () => run(() => onAlign("left")),
+        },
+        {
+          kind: "action",
+          id: "align-center",
+          label: "Align Center",
+          onSelect: () => run(() => onAlign("center")),
+        },
+        {
+          kind: "action",
+          id: "align-right",
+          label: "Align Right",
+          onSelect: () => run(() => onAlign("right")),
+        },
+        {
+          kind: "action",
+          id: "align-eq",
+          label: "Align at =",
+          onSelect: () => run(() => onAlign("eq")),
+        },
+        { kind: "separator", id: "format-sep-2" },
         { kind: "action", id: "color", label: "Color…", disabled: true },
         { kind: "action", id: "fence", label: "Fence Alignment…", disabled: true },
-        { kind: "action", id: "spacing", label: "Spacing…", disabled: true },
+        {
+          kind: "action",
+          id: "spacing",
+          label: "Define Spacing…",
+          onSelect: () => run(onOpenDefineSpacing),
+        },
       ],
     },
     {
@@ -349,7 +399,7 @@ export function MenuBar({
           kind: "action",
           id: "size-define",
           label: "Define Sizes…",
-          disabled: true,
+          onSelect: () => run(onOpenDefineSizes),
         },
       ],
     },
@@ -367,13 +417,13 @@ export function MenuBar({
           kind: "action",
           id: "prefs-sizes",
           label: "Define Sizes…",
-          disabled: true,
+          onSelect: () => run(onOpenDefineSizes),
         },
         {
           kind: "action",
           id: "prefs-spacing",
-          label: "Spacing…",
-          disabled: true,
+          label: "Define Spacing…",
+          onSelect: () => run(onOpenDefineSpacing),
         },
         {
           kind: "action",
@@ -406,6 +456,12 @@ export function MenuBar({
       id: "help",
       label: "Help",
       items: [
+        {
+          kind: "action",
+          id: "help-shortcuts",
+          label: "Keyboard Shortcuts…",
+          onSelect: () => run(onOpenShortcutsHelp),
+        },
         { kind: "action", id: "help-contents", label: "Contents…", disabled: true },
         { kind: "action", id: "help-search", label: "Search…", disabled: true },
         { kind: "separator", id: "help-sep-1" },

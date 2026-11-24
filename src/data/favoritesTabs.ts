@@ -107,7 +107,7 @@ export const FAVORITE_TABS: FavoriteTab[] = [
       entry("geo-angle", "\\angle ABC"),
     ],
   },
-  { id: "tab8", label: "Tab 8", items: [] },
+  { id: "tab8", label: "Custom", items: [] },
   { id: "tab9", label: "Tab 9", items: [] },
 ];
 

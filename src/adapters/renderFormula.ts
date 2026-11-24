@@ -5,6 +5,15 @@ import { ensureTexGyreTermesFonts } from "../styles/tex-gyre-termes";
 import "./export-formula.css";
 import { MT_FONT_LOAD_SPECS, MT_FONT_STACK } from "../styles/fontStack";
 import {
+  defineSizesInlineVars,
+  readDefineSizesPrefs,
+  resolveSizeSlotPt,
+} from "../types/defineSizes";
+import {
+  defineSpacingInlineVars,
+  readDefineSpacingPrefs,
+} from "../types/defineSpacing";
+import {
   defineStylesInlineVars,
   fontLoadSpecsForDefineStyles,
   fontStackFor,
@@ -21,11 +30,18 @@ import {
 } from "./pngPhys";
 
 /**
- * Physical Full size for PNG / Word export.
+ * Physical Full size for PNG / Word export (Define Sizes → Full).
  * Workspace Zoom (status-bar %) is view-only and must never feed this path —
- * clipboard baseline / pt sizing stay locked to 10pt regardless of 100–800% UI zoom.
+ * clipboard baseline / pt sizing stay on Full pt regardless of 100–800% UI zoom.
+ * True 4× / 384 DPI and negative baseline valign are unchanged.
  */
-const EXPORT_FONT_PT = defaultStylePreset.fullPt;
+function exportFontPt(): number {
+  try {
+    return resolveSizeSlotPt(readDefineSizesPrefs(), "full");
+  } catch {
+    return defaultStylePreset.fullPt;
+  }
+}
 
 /** SPEC Phase 2: 4× High-DPI PNG locked to physical 10pt (= 384 DPI vs 96). */
 export const DEFAULT_EXPORT_SCALE = 4;
@@ -76,21 +92,25 @@ async function waitForFonts(): Promise<void> {
   ensureTexGyreTermesFonts();
   await document.fonts.ready;
   const prefs = readDefineStylesPrefs();
+  const fontPt = exportFontPt();
   const specs = [
     ...BASE_EXPORT_FONT_LOAD_SPECS,
-    ...fontLoadSpecsForDefineStyles(prefs, EXPORT_FONT_PT),
+    ...fontLoadSpecsForDefineStyles(prefs, fontPt),
   ];
   await Promise.all(specs.map((spec) => document.fonts.load(spec).catch(() => [] as FontFace[])));
 }
 
-/** Off-screen MathLive markup at 10pt, ready for raster / SVG capture. */
+/** Off-screen MathLive markup at Full pt, ready for raster / SVG capture. */
 export async function mountExportNode(latex: string): Promise<HTMLElement> {
   await waitForFonts();
   const prefs = readDefineStylesPrefs();
+  const sizePrefs = readDefineSizesPrefs();
+  const spacingPrefs = readDefineSpacingPrefs();
+  const fontPt = resolveSizeSlotPt(sizePrefs, "full");
   const mathFamily = fontStackFor(prefs.styles.variable.font) || MT_FONT_STACK;
   const host = document.createElement("div");
   host.setAttribute("data-mt-export-host", "1");
-  // Inline line box at body 10pt so formula + baseline strut share one alphabetic
+  // Inline line box at body Full pt so formula + baseline strut share one alphabetic
   // baseline (Word `vertical-align: -depth`). Avoid font-size:0 — it collapses the
   // strut and under-reports depth, which makes equations float above body text.
   host.style.cssText = [
@@ -103,12 +123,12 @@ export async function mountExportNode(latex: string): Promise<HTMLElement> {
     "white-space:nowrap",
     "line-height:normal",
     `font-family:${mathFamily}`,
-    `font-size:${EXPORT_FONT_PT}pt`,
+    `font-size:${fontPt}pt`,
   ].join(";");
   const node = document.createElement("span");
   node.className = "mt-export-formula";
   // No padding — padding inflated Word display size and skewed depth.
-  // Inline Define Styles CSS vars so html-to-image keeps faces / bold / italic.
+  // Inline Define Styles / Sizes / Spacing CSS vars so html-to-image keeps faces.
   node.style.cssText = [
     "display:inline-block",
     "padding:0",
@@ -118,7 +138,9 @@ export async function mountExportNode(latex: string): Promise<HTMLElement> {
     "color:#000",
     `font-family:${mathFamily}`,
     defineStylesInlineVars(prefs),
-    `font-size:${EXPORT_FONT_PT}pt`,
+    defineSizesInlineVars(sizePrefs),
+    defineSpacingInlineVars(spacingPrefs),
+    `font-size:${fontPt}pt`,
     "line-height:normal",
     "vertical-align:baseline",
   ].join(";");
@@ -126,7 +148,7 @@ export async function mountExportNode(latex: string): Promise<HTMLElement> {
     defaultMode: "math",
     letterShapeStyle: "tex",
   });
-  // 10pt reference glyph "x" on the same line — Word body baseline proxy.
+  // Full-pt reference glyph "x" on the same line — Word body baseline proxy.
   // Depth = formula box bottom − reference bottom (fractions land ~5–8pt).
   const marker = document.createElement("span");
   marker.setAttribute("data-mt-baseline", "1");
@@ -138,7 +160,7 @@ export async function mountExportNode(latex: string): Promise<HTMLElement> {
     "border:0",
     "vertical-align:baseline",
     `font-family:${mathFamily}`,
-    `font-size:${EXPORT_FONT_PT}pt`,
+    `font-size:${fontPt}pt`,
     "line-height:normal",
     "color:transparent",
     "user-select:none",
@@ -163,7 +185,8 @@ export function unmountExportNode(node: HTMLElement): void {
  * 2. Formula box bottom − sibling 10pt reference `x` bottom
  */
 export function measureDepthPx(node: HTMLElement): number {
-  const fontPx = parseFloat(getComputedStyle(node).fontSize) || EXPORT_FONT_PT * (96 / 72);
+  const fontPx =
+    parseFloat(getComputedStyle(node).fontSize) || exportFontPt() * (96 / 72);
   let strutDepth = 0;
   const mlStrut = node.querySelector(".ML__strut--bottom");
   if (mlStrut instanceof HTMLElement) {

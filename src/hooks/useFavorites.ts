@@ -18,10 +18,19 @@ function readStored(): StoredFavorites {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return defaults();
     const parsed = JSON.parse(raw) as StoredFavorites;
+    const factory = cloneFavoriteTabs();
     const ids = new Set(parsed.tabs?.map((tab) => tab.id));
-    const complete = cloneFavoriteTabs().every((tab) => ids.has(tab.id));
+    const complete = factory.every((tab) => ids.has(tab.id));
     if (parsed.version !== 1 || !complete) return defaults();
-    return parsed;
+    // Refresh built-in tab labels (e.g. Tab 8 → Custom) without wiping items.
+    const labelById = new Map(factory.map((tab) => [tab.id, tab.label]));
+    return {
+      ...parsed,
+      tabs: parsed.tabs.map((tab) => ({
+        ...tab,
+        label: labelById.get(tab.id) ?? tab.label,
+      })),
+    };
   } catch {
     return defaults();
   }

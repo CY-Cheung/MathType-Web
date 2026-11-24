@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import type { MathfieldElement } from "mathlive";
+import { isAndroidUserAgent } from "../adapters/androidFnShortcuts";
 import type { ActiveStyleId } from "../types/activeStyle";
 import { insertAdaptedLatex } from "./insertAdapted";
 import {
@@ -34,6 +35,9 @@ export function useMathShortcuts(
   optionsRef.current = options;
 
   useEffect(() => {
+    // Desktop only — Android IME owns Ctrl/Alt chords; toolbar inserts instead.
+    if (isAndroidUserAgent()) return;
+
     const field = fieldRef.current;
     if (!field) return;
 

@@ -1,15 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { copyExport, type ExportFormat } from "./adapters/clipboard";
 import { parseEqHash } from "./adapters/eqHash";
+import { DefineSizesDialog } from "./components/DefineSizesDialog";
+import { DefineSpacingDialog } from "./components/DefineSpacingDialog";
 import { DefineStylesDialog } from "./components/DefineStylesDialog";
 import { DocxBatchPanel } from "./components/DocxBatchPanel";
 import { ExportMenu } from "./components/ExportMenu";
 import { FavoritesBar } from "./components/FavoritesBar";
 import { MathEditor, type EditorSelection, type MathEditorHandle } from "./components/MathEditor";
-import { MenuBar, type MenuBarEditAction } from "./components/MenuBar";
+import { MenuBar, type MenuBarAlignAction, type MenuBarEditAction } from "./components/MenuBar";
 import { MatrixDialog } from "./components/MatrixDialog";
+import { ShortcutsHelpDialog } from "./components/ShortcutsHelpDialog";
 import { StyleSwitcher } from "./components/StyleSwitcher";
 import { Toolbar } from "./components/Toolbar";
+import { formatAlignLatex } from "./core/alignFormat";
 import { matrixToLatex, type MatrixSpec } from "./core/matrixTemplate";
 import { ZoomSwitcher } from "./components/ZoomSwitcher";
 import {
@@ -19,6 +23,8 @@ import {
   isTextStyleShortcut,
   workspaceZoomShortcutPercent,
 } from "./core/shortcuts";
+import { useDefineSizes } from "./hooks/useDefineSizes";
+import { useDefineSpacing } from "./hooks/useDefineSpacing";
 import { useDefineStyles } from "./hooks/useDefineStyles";
 import { useExportPrefs } from "./hooks/useExportPrefs";
 import { useVisualViewportLock } from "./hooks/useVisualViewportLock";
@@ -32,8 +38,19 @@ import { defaultStylePreset } from "./types/preset";
 
 const TOAST_MS = 2400;
 
+const ALIGN_TOAST: Record<MenuBarAlignAction, string> = {
+  left: "Align Left",
+  center: "Align Center",
+  right: "Align Right",
+  eq: "Align at =",
+};
+
 function keepFocus(event: { preventDefault: () => void }): void {
   event.preventDefault();
+}
+
+function selectionCollapsed(selection: EditorSelection): boolean {
+  return selection.ranges.every(([start, end]) => start === end);
 }
 
 export default function App() {
@@ -47,13 +64,21 @@ export default function App() {
   const [matrixOpen, setMatrixOpen] = useState(false);
   const [batchOpen, setBatchOpen] = useState(false);
   const [stylesOpen, setStylesOpen] = useState(false);
+  const [sizesOpen, setSizesOpen] = useState(false);
+  const [spacingOpen, setSpacingOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [stylesEpoch, setStylesEpoch] = useState(0);
   // Single source for toolbar + status-bar Style (default Math).
   const [activeStyle, setActiveStyle] = useState<ActiveStyleId>(DEFAULT_ACTIVE_STYLE);
   const { prefs: stylePrefs, commit: commitStyles } = useDefineStyles();
+  const { prefs: sizePrefs, commit: commitSizes, presetFields } = useDefineSizes();
+  const { prefs: spacingPrefs, commit: commitSpacing } = useDefineSpacing();
   const { zoomPercent, setZoomPercent } = useWorkspaceZoom();
   const { plainImageNoLink, setPlainImageNoLink } = useExportPrefs();
   const viewportHeight = useVisualViewportLock();
+
+  const dialogOpen =
+    matrixOpen || stylesOpen || sizesOpen || spacingOpen || shortcutsOpen;
 
   const showToast = useCallback((message: string) => {
     setToast(message);
@@ -97,6 +122,21 @@ export default function App() {
     setMatrixOpen(false);
     editorRef.current?.insert(matrixToLatex(spec), at);
   }, []);
+
+  const runAlign = useCallback(
+    (action: MenuBarAlignAction) => {
+      const editor = editorRef.current;
+      if (!editor) return;
+      const selection = editor.captureSelection();
+      const collapsed = selectionCollapsed(selection);
+      const latex = collapsed ? editor.captureLatex() : editor.capture();
+      const next = formatAlignLatex(latex, action);
+      if (collapsed) editor.load(next);
+      else editor.insert(next, selection);
+      showToast(ALIGN_TOAST[action]);
+    },
+    [showToast],
+  );
 
   const runExport = useCallback(
     async (format: ExportFormat) => {
@@ -156,7 +196,7 @@ export default function App() {
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (matrixOpenRef.current || stylesOpen) return;
+      if (matrixOpenRef.current || dialogOpen) return;
       const target = event.target;
       if (!(target instanceof Element)) return;
       if (target.closest("input, textarea, select, [role='dialog']")) return;
@@ -197,7 +237,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [changeActiveStyle, changeZoom, openMatrix, runExport, stylesOpen]);
+  }, [changeActiveStyle, changeZoom, dialogOpen, openMatrix, runExport]);
 
   useEffect(
     () => () => {
@@ -227,8 +267,8 @@ export default function App() {
     };
   }, [showToast]);
 
-  // View zoom only — export (`renderFormula`) always uses physical Full 10pt.
-  const preset = { ...defaultStylePreset, zoomPercent };
+  // View zoom only — export (`renderFormula`) uses Define Sizes Full pt + 4× DPI.
+  const preset = { ...defaultStylePreset, ...presetFields, zoomPercent };
   const sizeHint = `Size: Full (${preset.fullPt}pt)`;
   const faceHint = `Var: ${stylePrefs.styles.variable.font} · Text: ${stylePrefs.styles.text.font}`;
   const statusBase = toast || chordStatus || `${sizeHint} · ${faceHint}`;
@@ -273,6 +313,11 @@ export default function App() {
             onZoomChange={changeZoom}
             onPlainImageNoLinkChange={togglePlainImageNoLink}
             onOpenDefineStyles={() => setStylesOpen(true)}
+            onOpenDefineSizes={() => setSizesOpen(true)}
+            onOpenDefineSpacing={() => setSpacingOpen(true)}
+            onOpenMatrix={openMatrix}
+            onAlign={runAlign}
+            onOpenShortcutsHelp={() => setShortcutsOpen(true)}
             onEdit={runEdit}
             onExportMathMl={() => void runExport("mathml")}
           />
@@ -343,6 +388,29 @@ export default function App() {
           }}
           onClose={() => setStylesOpen(false)}
         />
+      ) : null}
+      {sizesOpen ? (
+        <DefineSizesDialog
+          prefs={sizePrefs}
+          onCommit={(next, persist) => {
+            commitSizes(next, persist);
+            showToast("Sizes applied");
+          }}
+          onClose={() => setSizesOpen(false)}
+        />
+      ) : null}
+      {spacingOpen ? (
+        <DefineSpacingDialog
+          prefs={spacingPrefs}
+          onCommit={(next, persist) => {
+            commitSpacing(next, persist);
+            showToast("Spacing applied");
+          }}
+          onClose={() => setSpacingOpen(false)}
+        />
+      ) : null}
+      {shortcutsOpen ? (
+        <ShortcutsHelpDialog onClose={() => setShortcutsOpen(false)} />
       ) : null}
     </div>
   );

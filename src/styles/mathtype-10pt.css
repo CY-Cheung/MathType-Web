@@ -33,6 +33,12 @@
   --mt-selection-bg: #80ffff;
   --mt-empty-slot-color: #008000;
   --mt-view-size: calc(var(--mt-full-size) * var(--mt-zoom));
+  /* Define Spacing — JS syncDefineSpacingToRoot() overwrites these live. */
+  --mt-line-spacing: 1.2;
+  --mt-num-gap: 0.1em;
+  --mt-den-gap: 0.1em;
+  --mt-matrix-row-gap: 0.5em;
+  --mt-matrix-col-gap: 0.5em;
   --text-font-family: var(--mt-text-font);
   color-scheme: light;
 }
@@ -50,6 +56,7 @@ math-field.mt-math-field {
   color: #000;
   font-family: var(--mt-math-font);
   font-size: var(--mt-view-size);
+  line-height: var(--mt-line-spacing);
   --text-font-family: var(--mt-text-font);
   --selection-background-color: var(--mt-selection-bg);
   /* MathLive paints .ML__text with --highlight-text while focused — clear it. */
@@ -60,6 +67,20 @@ math-field.mt-math-field {
   touch-action: manipulation;
   -webkit-user-select: text;
   user-select: text;
+}
+
+/* Define Spacing approximations for canvas preview (fraction / matrix gaps). */
+math-field.mt-math-field .ML__mfrac > span:first-child,
+.mt-export-formula .ML__mfrac > span:first-child {
+  padding-bottom: var(--mt-num-gap);
+}
+math-field.mt-math-field .ML__mfrac > span:last-child,
+.mt-export-formula .ML__mfrac > span:last-child {
+  padding-top: var(--mt-den-gap);
+}
+math-field.mt-math-field .ML__array,
+.mt-export-formula .ML__array {
+  border-spacing: var(--mt-matrix-col-gap) var(--mt-matrix-row-gap);
 }
 
 @media (min-width: 640px) {
